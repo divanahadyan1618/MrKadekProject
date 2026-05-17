@@ -66,7 +66,18 @@ Convert numbers and scores into high-impact visuals:
 
 ---
 
-## 🚀 How to Run the Notebooks
+## ☁️ Run in Google Colab (No Installation Required!)
+
+You can run these notebooks directly in your browser using Google Colab. The notebooks are pre-configured to download the dataset automatically.
+
+- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/01_scraping.ipynb) **Notebook 1: Web Scraping TripAdvisor Reviews**
+- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/02_cleaning.ipynb) **Notebook 2: Text Preprocessing & Cleaning**
+- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/03_sentiment_analysis.ipynb) **Notebook 3: Sentiment Scoring**
+- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/04_visualization.ipynb) **Notebook 4: Data Visualization & Insights**
+
+---
+
+## 🚀 How to Run Locally
 
 1. **Start Jupyter Notebook**:
    Open a terminal (e.g., PowerShell or Command Prompt) in this directory and run:
