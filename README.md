@@ -68,12 +68,9 @@ Convert numbers and scores into high-impact visuals:
 
 ## ☁️ Run in Google Colab (No Installation Required!)
 
-You can run these notebooks directly in your browser using Google Colab. The notebooks are pre-configured to download the dataset automatically.
+You can run this entire project in your browser using Google Colab in a single, unified workspace. The master notebook contains the full workflow (from scraping to visualization) and is pre-configured to download the datasets automatically.
 
-- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/01_scraping.ipynb) **Notebook 1: Web Scraping TripAdvisor Reviews**
-- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/02_cleaning.ipynb) **Notebook 2: Text Preprocessing & Cleaning**
-- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/03_sentiment_analysis.ipynb) **Notebook 3: Sentiment Scoring**
-- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/04_visualization.ipynb) **Notebook 4: Data Visualization & Insights**
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/Colab_Master_TripAdvisor.ipynb) **Open the Master Research Notebook**
 
 ---
 
