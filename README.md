@@ -64,7 +64,7 @@ Convert numbers and scores into high-impact visuals:
 * **Sentiment Distribution**: Count how many reviews are positive, neutral, or negative.
 * **Rating vs. Sentiment Boxplot**: Group reviews by 1-star to 5-star TripAdvisor rating and compare the written text sentiment inside each rating group. The dashed line shows the hotel's average TripAdvisor rating, and the diamonds show average text sentiment per rating group.
 * **Emotion Breakdown**: Compare emotion categories such as joy, trust, anger, fear, and sadness.
-* **Word Cloud**: Instantly spot dominant topics (e.g., "authentic", "friendly" vs. "queue", "expensive").
+* **Sentiment Word Cloud**: Instantly spot the most repeated AFINN-scored sentiment words. Neutral topic words are intentionally excluded, so the cloud focuses on words such as "beautiful", "friendly", "excellent", or "bad".
 * **Monthly Sentiment Heatmap**: Read the calendar pattern quickly. Each tile is one month in one year, colored by average sentiment and labeled with the number of reviews.
 * **Monthly Rolling Trend**: Follow the sentiment trend over time. The blue line smooths monthly sentiment using a 6-month rolling average, and the dotted line compares each month to the average of all earlier reviews.
 * **Quarterly Boxplot**: Summarize review sentiment spread for each quarter. This is less noisy than monthly boxplots because each quarter usually has more reviews.

@@ -139,6 +139,17 @@ class DataWiringTests(unittest.TestCase):
         self.assertIn("geom_text(aes(label = review_count)", script)
         self.assertIn("geom_text(aes(label = format(score, big.mark = \",\"))", script)
 
+    def test_visualization_word_cloud_uses_only_sentiment_words(self):
+        script = (PROJECT_ROOT / "04_visualization.R").read_text()
+        self.assertIn("sentiment_lexicon_words", script)
+        self.assertIn("sentiment_word_counts", script)
+        self.assertIn("domain_neutral_words", script)
+        self.assertIn('syuzhet::get_sentiment(word, method = "afinn")', script)
+        self.assertIn("filter(sentiment_score != 0)", script)
+        self.assertIn("filter(!word %in% domain_neutral_words)", script)
+        self.assertIn("ordered.colors = TRUE", script)
+        self.assertNotRegex(script, r"(?m)^word_counts <- cleaned_tokens")
+
     def test_visualization_bins_sentiment_by_rating(self):
         script = (PROJECT_ROOT / "04_visualization.R").read_text()
         self.assertIn("rating_group", script)

@@ -234,24 +234,51 @@ ggsave(file.path(figures_dir, "emotions_breakdown.png"), plot = p2, width = 8, h
 # =====================================================================
 # STEP 5: Draw the Word Cloud
 # =====================================================================
-# A Word Cloud shows the most frequently used words. The bigger the word, the more it was used!
-# We 'filter' out boring words like 'hotel' and 'bali' because they waste space.
-word_counts <- cleaned_tokens %>%
-  count(word, sort = TRUE) %>%
-  filter(!word %in% c("hotel", "resort", "tripadvisor", "review", "stay", "room", "villa", "service"))
+# This word cloud is sentiment-only.
+# That means we do NOT use every frequent word in the reviews.
+# Instead, we first ask the AFINN sentiment dictionary which words have a
+# positive or negative sentiment score. Words with score 0 are neutral, so they
+# are removed from this chart.
+# Some words can be sentiment words in one context but neutral hotel words in
+# another context. For example, AFINN treats "lobby" as negative because of the
+# political meaning, but a hotel lobby is just a place. We exclude those obvious
+# hotel-context false positives here.
+domain_neutral_words <- c("hotel", "resort", "tripadvisor", "review", "stay", "room", "villa", "service", "lobby")
 
-cat("Drawing the word cloud...\n")
+sentiment_lexicon_words <- cleaned_tokens %>%
+  distinct(word) %>%
+  mutate(sentiment_score = syuzhet::get_sentiment(word, method = "afinn")) %>%
+  filter(sentiment_score != 0) %>%
+  filter(!word %in% domain_neutral_words)
+
+# Now count only the review words that AFINN says are sentiment words.
+# The bigger the word, the more often guests used that sentiment word.
+sentiment_word_counts <- cleaned_tokens %>%
+  inner_join(sentiment_lexicon_words, by = "word") %>%
+  count(word, sentiment_score, sort = TRUE)
+
+if (nrow(sentiment_word_counts) == 0) {
+  stop("No AFINN sentiment words were found in the cleaned review tokens.")
+}
+
+max_sentiment_cloud_words <- min(40, nrow(sentiment_word_counts))
+
+# Green words are positive sentiment words. Red words are negative sentiment words.
+sentiment_word_colors <- if_else(sentiment_word_counts$sentiment_score > 0, "#16A085", "#E74C3C")
+
+cat("Drawing the sentiment-only word cloud...\n")
 
 # Display the word cloud in the RStudio Plots tab!
 set.seed(123)
 wordcloud(
-  words = word_counts$word,
-  freq = word_counts$n,
+  words = sentiment_word_counts$word,
+  freq = sentiment_word_counts$n,
   min.freq = 2,
-  max.words = 40,
+  max.words = max_sentiment_cloud_words,
   random.order = FALSE,
   rot.per = 0.2,
-  colors = brewer.pal(8, "Dark2")
+  ordered.colors = TRUE,
+  colors = sentiment_word_colors
 )
 
 # Open a digital "canvas" to draw the picture on
@@ -260,13 +287,14 @@ set.seed(123) # Lock the randomness so the cloud looks exactly the same every ti
 
 # Call the wordcloud drawing tool
 wordcloud(
-  words = word_counts$word,   # What words to draw
-  freq = word_counts$n,       # How big to draw them based on frequency
+  words = sentiment_word_counts$word, # What sentiment words to draw
+  freq = sentiment_word_counts$n,     # How big to draw them based on frequency
   min.freq = 2,               # Ignore words that only appeared once
-  max.words = 40,             # Stop drawing after 40 words so it doesn't look messy
+  max.words = max_sentiment_cloud_words, # Stop drawing after 40 words so it doesn't look messy
   random.order = FALSE,       # Put the biggest words right in the center
   rot.per = 0.2,              # Randomly rotate 20% of the words sideways
-  colors = brewer.pal(8, "Dark2") # Paint them with cool colors
+  ordered.colors = TRUE,      # Use each word's own positive/negative color
+  colors = sentiment_word_colors # Green means positive, red means negative
 )
 dev.off() # Close the digital canvas and save the file!
 
