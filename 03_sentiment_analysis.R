@@ -20,6 +20,7 @@ library(tidytext)
 # 'syuzhet' is a very famous toolset built specifically for Sentiment Analysis.
 # It contains the massive dictionaries we need to score emotions.
 library(syuzhet)
+source("scripts/data_config.R")
 
 cat("Libraries loaded successfully!\n")
 
@@ -27,7 +28,18 @@ cat("Libraries loaded successfully!\n")
 # STEP 2: Open the Cleaned Reviews
 # =====================================================================
 # We load the full cleaned sentences from Step 2 into a box named 'cleaned_reviews'.
-cleaned_reviews <- read_csv2("data/cleaned/bvlgari_cleaned_reviews.csv")
+if (!file.exists(cleaned_reviews_path)) {
+  stop(
+    paste(
+      "Missing cleaned review data at:",
+      cleaned_reviews_path,
+      "Run Step 2 first with: Rscript 02_cleaning.R"
+    ),
+    call. = FALSE
+  )
+}
+
+cleaned_reviews <- read_csv(cleaned_reviews_path, show_col_types = FALSE)
 
 cat("Loaded", nrow(cleaned_reviews), "cleaned reviews for emotional scoring.\n")
 
@@ -100,5 +112,5 @@ final_research_data <- bind_cols(sentiment_classified, nrc_emotions)
 # Our table now has the original text, the numeric scores, the positive/negative labels, AND the 8 deep emotions!
 # We save this final master dataset to the computer.
 
-write_excel_csv2(final_research_data, "data/cleaned/bvlgari_sentiment_scores.csv")
+write_csv(final_research_data, sentiment_scores_path)
 cat("Sentiment-scored research data saved successfully!\n")

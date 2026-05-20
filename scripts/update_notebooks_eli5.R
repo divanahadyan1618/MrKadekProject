@@ -36,9 +36,9 @@ split_r_script <- function(file_path) {
   return(blocks)
 }
 
-# 1. Update 01_scraping.ipynb
-blocks_01 <- split_r_script("01_scraping.R")
-nb_01 <- fromJSON("01_scraping.ipynb", simplifyVector = FALSE)
+# 1. Update 01_data_import.ipynb
+blocks_01 <- split_r_script("01_data_import.R")
+nb_01 <- fromJSON("01_data_import.ipynb", simplifyVector = FALSE)
 code_idx <- 1
 for (i in seq_along(nb_01$cells)) {
   if (nb_01$cells[[i]]$cell_type == "code") {
@@ -55,7 +55,7 @@ for (i in seq_along(nb_01$cells)) {
     }
   }
 }
-write_json(nb_01, "01_scraping.ipynb", auto_unbox = TRUE, pretty = TRUE)
+write_json(nb_01, "01_data_import.ipynb", auto_unbox = TRUE, pretty = TRUE)
 
 # 2. Update 02_cleaning.ipynb
 blocks_02 <- split_r_script("02_cleaning.R")

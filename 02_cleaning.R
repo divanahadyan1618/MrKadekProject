@@ -19,6 +19,7 @@ library(tidytext)
 
 # We wrote a file called 'helpers.R' that contains our secret cleaning recipes.
 # 'source()' tells the computer to load our custom recipes into memory.
+source("scripts/data_config.R")
 source("scripts/helpers.R")
 
 cat("Helper functions and libraries loaded!\n")
@@ -26,9 +27,27 @@ cat("Helper functions and libraries loaded!\n")
 # =====================================================================
 # STEP 2: Open the Raw Data
 # =====================================================================
-# 'read_csv2' reads the Excel file we created in Step 1 and puts it in a 
-# box named 'raw_data' so we can look at it.
-raw_data <- read_csv2("data/raw/bvlgari_raw_reviews.csv")
+# 'read_csv' opens the prepared reviews CSV that Step 1 validated.
+if (!file.exists(raw_reviews_path)) {
+  stop(
+    paste(
+      "Missing raw review data at:",
+      raw_reviews_path,
+      "Run Step 1 first with: Rscript 01_data_import.R"
+    ),
+    call. = FALSE
+  )
+}
+
+raw_data <- read_csv(raw_reviews_path, show_col_types = FALSE, guess_max = 10000)
+
+sample_size <- suppressWarnings(as.integer(Sys.getenv("HOTEL_REVIEW_SAMPLE_SIZE", "0")))
+if (!is.na(sample_size) && sample_size > 0 && nrow(raw_data) > sample_size) {
+  raw_data <- raw_data %>% slice_head(n = sample_size)
+  cat("Using the first", sample_size, "reviews because HOTEL_REVIEW_SAMPLE_SIZE is set.\n")
+}
+
+raw_data <- standardize_hotel_reviews(raw_data)
 
 cat("Successfully loaded", nrow(raw_data), "raw reviews!\n")
 
@@ -85,7 +104,9 @@ cat("After throwing away useless stopwords, we only have", nrow(clean_tokens_df)
 # 2. clean_tokens_df: The chopped individual words (used for the wordcloud).
 
 # Let's save them to the computer!
-write_excel_csv2(cleaned_reviews_df, "data/cleaned/bvlgari_cleaned_reviews.csv")
-write_excel_csv2(clean_tokens_df, "data/cleaned/bvlgari_cleaned_tokens.csv")
+dir.create(dirname(cleaned_reviews_path), recursive = TRUE, showWarnings = FALSE)
+
+write_csv(cleaned_reviews_df, cleaned_reviews_path)
+write_csv(clean_tokens_df, cleaned_tokens_path)
 
 cat("Cleaned reviews & tokens successfully saved to the 'data/cleaned/' folder!\n")

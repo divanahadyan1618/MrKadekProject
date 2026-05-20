@@ -21,12 +21,12 @@ This workspace is organized as follows:
 ```text
 KADEK AWIKWOK/
 ├── README.md                     # This file (Project Overview)
-├── 01_scraping.ipynb             # Notebook 1: Web Scraping TripAdvisor Reviews
+├── 01_data_import.ipynb          # Notebook 1: Import prepared review CSV
 ├── 02_cleaning.ipynb             # Notebook 2: Text Preprocessing & Cleaning
 ├── 03_sentiment_analysis.ipynb   # Notebook 3: Sentiment Scoring (AFINN, NRC, Syuzhet)
 ├── 04_visualization.ipynb        # Notebook 4: Charts, Graphs, & Word Clouds
 ├── data/
-│   ├── raw/                      # Raw scraped reviews (CSV format)
+│   ├── raw/                      # Raw prepared TripAdvisor review CSV
 │   └── cleaned/                  # Preprocessed and tokenized text data
 ├── output/
 │   ├── figures/                  # Saved charts, graphs, and word clouds (PNG/PDF)
@@ -39,12 +39,13 @@ KADEK AWIKWOK/
 
 ## 🛠️ The 4-Step Research Workflow
 
-### Step 1: Web Scraping (`01_scraping.ipynb`)
-Extract reviews dynamically from TripAdvisor. For this project, we target the prestigious **Bvlgari Resort Bali**. We collect:
+### Step 1: Import Review CSV (`01_data_import.ipynb`)
+Load the prepared TripAdvisor review CSV for **Bvlgari Resort Bali**. The raw CSV includes:
 * Review texts
 * Rating scores (1-5 stars)
 * Review dates
-* User contributions (optional)
+* Stay dates and trip types
+* Reviewer metadata
 
 ### Step 2: Data Cleaning & Preprocessing (`02_cleaning.ipynb`)
 Raw reviews are noisy. We clean the text by:
@@ -60,15 +61,20 @@ Apply lexicographical models to identify the emotional sentiment of words:
 
 ### Step 4: Data Visualization & Insights (`04_visualization.ipynb`)
 Convert numbers and scores into high-impact visuals:
-* **Word Clouds**: Instantly spot dominant topics (e.g., "authentic", "friendly" vs. "queue", "expensive").
-* **Sentiment Over Time**: See how guest satisfaction changes during peak season vs. off-peak season.
-* **Rating vs. Sentiment Divergence**: Discover cases where high ratings co-exist with negative remarks.
+* **Sentiment Distribution**: Count how many reviews are positive, neutral, or negative.
+* **Rating vs. Sentiment Boxplot**: Group reviews by 1-star to 5-star TripAdvisor rating and compare the written text sentiment inside each rating group. The dashed line shows the hotel's average TripAdvisor rating, and the diamonds show average text sentiment per rating group.
+* **Emotion Breakdown**: Compare emotion categories such as joy, trust, anger, fear, and sadness.
+* **Word Cloud**: Instantly spot dominant topics (e.g., "authentic", "friendly" vs. "queue", "expensive").
+* **Monthly Sentiment Heatmap**: Read the calendar pattern quickly. Each tile is one month in one year, colored by average sentiment and labeled with the number of reviews.
+* **Monthly Rolling Trend**: Follow the sentiment trend over time. The blue line smooths monthly sentiment using a 6-month rolling average, and the dotted line compares each month to the average of all earlier reviews.
+* **Quarterly Boxplot**: Summarize review sentiment spread for each quarter. This is less noisy than monthly boxplots because each quarter usually has more reviews.
+* **Yearly Boxplot with Statistics**: Summarize each year's sentiment distribution with `n`, average, median, quartiles, minimum, maximum, and outlier count printed below the chart.
 
 ---
 
 ## ☁️ Run in Google Colab (No Installation Required!)
 
-You can run this entire project in your browser using Google Colab in a single, unified workspace. The master notebook contains the full workflow (from scraping to visualization) and is pre-configured to download the datasets automatically.
+You can run this entire project in your browser using Google Colab in a single, unified workspace. The master notebook contains the full workflow from data import to visualization. Upload `data/raw/reviews.csv` before running the notebook outside this local project.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/Colab_Master_TripAdvisor.ipynb) **Open the Master Research Notebook**
 
@@ -76,15 +82,19 @@ You can run this entire project in your browser using Google Colab in a single, 
 
 ## 🚀 How to Run Locally
 
-1. **Start Jupyter Notebook**:
+1. **Install R packages once**:
+   ```r
+   install.packages(c("tidyverse", "tidytext", "syuzhet", "wordcloud", "RColorBrewer", "lubridate"))
+   ```
+2. **Start Jupyter Notebook**:
    Open a terminal (e.g., PowerShell or Command Prompt) in this directory and run:
    ```bash
    jupyter notebook
    ```
-2. **Open in Browser**:
+3. **Open in Browser**:
    Your browser will automatically open to the Jupyter dashboard.
-3. **Execute Steps Sequentially**:
-   Start with `01_scraping.ipynb` and proceed in order (01 ➔ 02 ➔ 03 ➔ 04). Each notebook contains clear explanations and R code blocks that can be executed cell-by-cell.
+4. **Execute Steps Sequentially**:
+   Start with `01_data_import.ipynb` and proceed in order (01 ➔ 02 ➔ 03 ➔ 04). Each notebook contains clear explanations and R code blocks that can be executed cell-by-cell.
 
 ---
 

@@ -4,3 +4,8 @@
 .Ruserdata
 .ipynb_checkpoints/
 __pycache__/
+data/raw/*
+!data/raw/reviews.csv
+data/cleaned/*
+output/figures/*
+.positai
