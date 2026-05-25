@@ -4,8 +4,7 @@
 .Ruserdata
 .ipynb_checkpoints/
 __pycache__/
+.DS_Store
 data/raw/*
 !data/raw/reviews.csv
-data/cleaned/*
-output/figures/*
 .positai
