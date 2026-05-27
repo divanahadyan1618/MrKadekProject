@@ -44,6 +44,11 @@ DOCUMENTS = {
         "pdf": PROJECT_ROOT / "output" / "pdf" / "bvlgari_review_analysis_methods.pdf",
         "footer": "Methods: TripAdvisor Review Sentiment Analysis for Bvlgari Resort Bali",
     },
+    "methods_id": {
+        "markdown": PROJECT_ROOT / "output" / "reports" / "bvlgari_review_analysis_methods_id.md",
+        "pdf": PROJECT_ROOT / "output" / "pdf" / "bvlgari_review_analysis_methods_id.pdf",
+        "footer": "Metode: Analisis Sentimen Ulasan TripAdvisor untuk Bvlgari Resort Bali",
+    },
 }
 
 PAGE_WIDTH, _PAGE_HEIGHT = letter
