@@ -25,6 +25,7 @@ KADEK AWIKWOK/
 ├── 02_cleaning.ipynb             # Notebook 2: Text Preprocessing & Cleaning
 ├── 03_sentiment_analysis.ipynb   # Notebook 3: Sentiment Scoring (AFINN, NRC, Syuzhet)
 ├── 04_visualization.ipynb        # Notebook 4: Charts, Graphs, & Word Clouds
+├── 05_aspect_text_analysis.R     # Step 5: Aspect ratings linked to review text
 ├── data/
 │   ├── raw/                      # Raw prepared TripAdvisor review CSV
 │   └── cleaned/                  # Preprocessed and tokenized text data
@@ -37,7 +38,7 @@ KADEK AWIKWOK/
 
 ---
 
-## 🛠️ The 4-Step Research Workflow
+## 🛠️ The 5-Step Research Workflow
 
 ### Step 1: Import Review CSV (`01_data_import.ipynb`)
 Load the prepared TripAdvisor review CSV for **Bvlgari Resort Bali**. The raw CSV includes:
@@ -63,12 +64,21 @@ Apply lexicographical models to identify the emotional sentiment of words:
 Convert numbers and scores into high-impact visuals:
 * **Sentiment Distribution**: Count how many reviews are positive, neutral, or negative.
 * **Rating vs. Sentiment Boxplot**: Group reviews by 1-star to 5-star TripAdvisor rating and compare the written text sentiment inside each rating group. The dashed line shows the hotel's average TripAdvisor rating, and the diamonds show average text sentiment per rating group.
+* **Aspect Rating Diagnostics**: Compare value, rooms, location, cleanliness, service, and sleep quality using average ratings, low-score shares, and yearly heatmaps.
 * **Emotion Breakdown**: Compare emotion categories such as joy, trust, anger, fear, and sadness.
 * **Sentiment Word Cloud**: Instantly spot the most repeated AFINN-scored sentiment words. Neutral topic words are intentionally excluded, so the cloud focuses on words such as "beautiful", "friendly", "excellent", or "bad".
 * **Monthly Sentiment Heatmap**: Read the calendar pattern quickly. Each tile is one month in one year, colored by average sentiment and labeled with the number of reviews.
 * **Monthly Rolling Trend**: Follow the sentiment trend over time. The blue line smooths monthly sentiment using a 6-month rolling average, and the dotted line compares each month to the average of all earlier reviews.
 * **Quarterly Boxplot**: Summarize review sentiment spread for each quarter. This is less noisy than monthly boxplots because each quarter usually has more reviews.
 * **Yearly Boxplot with Statistics**: Summarize each year's sentiment distribution with `n`, average, median, quartiles, minimum, maximum, and outlier count printed below the chart.
+
+### Step 5: Aspect-Text Diagnostics (`05_aspect_text_analysis.R`)
+Connect structured aspect ratings to the written reviews:
+* **Aspect-Conditioned Text Mining**: Compare words and phrases in low aspect reviews (`1-3`) against high aspect reviews (`4-5`).
+* **Aspect-Specific Sentiment**: Summarize text sentiment, negative-text share, and emotion counts by aspect.
+* **Aspect-Text Mismatch Review Table**: Identify cases such as high overall ratings with low aspect ratings, or high aspect ratings with negative text.
+* **Key-Term Tables by Aspect**: Save low-score-associated words and phrases for value, rooms, location, cleanliness, service, and sleep quality.
+* **Aspect-Text Visualizations**: Generate boxplots, word and phrase charts, a negative-term heatmap, and mismatch count charts for qualitative interpretation.
 
 ---
 
@@ -94,7 +104,7 @@ You can run this entire project in your browser using Google Colab in a single, 
 3. **Open in Browser**:
    Your browser will automatically open to the Jupyter dashboard.
 4. **Execute Steps Sequentially**:
-   Start with `01_data_import.ipynb` and proceed in order (01 ➔ 02 ➔ 03 ➔ 04). Each notebook contains clear explanations and R code blocks that can be executed cell-by-cell.
+   Start with `01_data_import.ipynb` and proceed in order (01 -> 02 -> 03 -> 04 -> 05). Each notebook or script contains clear explanations and R code blocks that can be executed cell-by-cell.
 
 ---
 

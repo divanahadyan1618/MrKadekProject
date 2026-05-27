@@ -1,0 +1,13 @@
+aspect_key,aspect_label,band_key,aspect_score_band,review_count,mean_aspect_rating,mean_overall_rating,mean_afinn_sentiment,median_afinn_sentiment,negative_text_share,mean_anger,mean_negative_nrc
+value_rating,Value,high,High aspect score (4-5),254,4.654,4.909,20.602,19,0.012,0.677,2.287
+value_rating,Value,low,Low aspect score (1-3),85,2.271,3.212,11.906,11,0.082,2.224,6.271
+rooms_rating,Rooms,high,High aspect score (4-5),282,4.83,4.709,20.099,18,0.018,0.855,2.738
+rooms_rating,Rooms,low,Low aspect score (1-3),40,2.35,2.525,7.95,6.5,0.125,2.825,8.275
+location_rating,Location,high,High aspect score (4-5),299,4.809,4.619,19.632,17,0.017,0.91,2.809
+location_rating,Location,low,Low aspect score (1-3),38,2.632,3.237,11.053,7.5,0.132,2.342,6.789
+cleanliness_rating,Cleanliness,high,High aspect score (4-5),292,4.866,4.723,19.49,17,0.01,0.894,2.75
+cleanliness_rating,Cleanliness,low,Low aspect score (1-3),35,2.114,2.371,9.314,6,0.171,3.143,9.114
+service_rating,Service,high,High aspect score (4-5),406,4.882,4.714,19.611,17.5,0.012,0.857,2.788
+service_rating,Service,low,Low aspect score (1-3),34,2.147,2.265,8.265,5.5,0.235,2.912,8
+sleep_quality_rating,Sleep quality,high,High aspect score (4-5),243,4.86,4.77,20.037,17,0.016,0.922,2.864
+sleep_quality_rating,Sleep quality,low,Low aspect score (1-3),29,1.966,2.103,7.862,5,0.207,2.724,7.379

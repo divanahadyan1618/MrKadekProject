@@ -35,6 +35,7 @@ research_data <- read_csv(sentiment_scores_path, show_col_types = FALSE)
 cleaned_tokens <- read_csv(cleaned_tokens_path, show_col_types = FALSE)
 
 dir.create(figures_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(reports_dir, recursive = TRUE, showWarnings = FALSE)
 
 cat("Data and drawing tools loaded successfully!\n")
 
@@ -55,6 +56,41 @@ theme_premium <- function() {
     legend.position = "none", # Hide the messy legend box
     panel.grid.minor = element_blank() # Remove distracting background grid lines
   )
+}
+
+parse_review_dates <- function(date_values) {
+  # Dates can be written in different formats.
+  # This helper tries several common date formats until one works.
+  # suppressWarnings() keeps R from printing scary warning messages every time
+  # one date format does not match.
+  date_text <- as.character(date_values)
+  parsed <- as.Date(suppressWarnings(lubridate::ymd(date_text)))
+
+  missing_dates <- is.na(parsed)
+  parsed[missing_dates] <- as.Date(suppressWarnings(lubridate::mdy(date_text[missing_dates])))
+
+  missing_dates <- is.na(parsed)
+  parsed[missing_dates] <- as.Date(suppressWarnings(lubridate::dmy(date_text[missing_dates])))
+
+  missing_dates <- is.na(parsed)
+  parsed[missing_dates] <- as.Date(suppressWarnings(lubridate::my(date_text[missing_dates])))
+
+  parsed
+}
+
+safe_correlation <- function(x_values, y_values) {
+  complete_rows <- complete.cases(x_values, y_values)
+  if (sum(complete_rows) < 3) {
+    return(NA_real_)
+  }
+
+  x_complete <- x_values[complete_rows]
+  y_complete <- y_values[complete_rows]
+  if (sd(x_complete) == 0 || sd(y_complete) == 0) {
+    return(NA_real_)
+  }
+
+  cor(x_complete, y_complete)
 }
 
 # =====================================================================
@@ -201,7 +237,254 @@ print(p1b)
 ggsave(file.path(figures_dir, "sentiment_by_rating_boxplot.png"), plot = p1b, width = 9.5, height = 5.8, dpi = 300)
 
 # =====================================================================
-# STEP 4: Draw the Deep Emotion Chart (Joy, Trust, Anger, etc.)
+# STEP 4: Analyze Structured Aspect Ratings
+# =====================================================================
+# Many TripAdvisor reviews include separate ratings for value, rooms, location,
+# cleanliness, service, and sleep quality. These fields are very useful because
+# they tell us which part of the guest experience is weaker, even when the
+# overall star rating is high.
+
+aspect_rating_columns <- c(
+  "value_rating" = "Value",
+  "rooms_rating" = "Rooms",
+  "location_rating" = "Location",
+  "cleanliness_rating" = "Cleanliness",
+  "service_rating" = "Service",
+  "sleep_quality_rating" = "Sleep quality"
+)
+# The raw data may not always include every optional TripAdvisor aspect field.
+# This line checks which of the expected aspect columns are actually available
+# before the script tries to use them.
+available_aspect_columns <- names(aspect_rating_columns)[names(aspect_rating_columns) %in% names(research_data)]
+
+if (length(available_aspect_columns) > 0) {
+  # Make sure the rating columns are numbers. parse_number() is forgiving: it
+  # can read values such as "5", "5.0", or even "5 of 5" as the number 5.
+  aspect_data <- research_data %>%
+    mutate(
+      overall_rating = readr::parse_number(as.character(rating)),
+      score_afinn_number = readr::parse_number(as.character(score_afinn)),
+      date_parsed = parse_review_dates(review_date),
+      year_label = as.character(lubridate::year(date_parsed)),
+      across(all_of(available_aspect_columns), ~ readr::parse_number(as.character(.x)))
+    )
+
+  # pivot_longer changes the table shape from "wide" to "long":
+  # - Wide format has one row per review and many aspect-rating columns.
+  # - Long format has one row per review-aspect pair.
+  # Long format makes summaries and charts much easier to build.
+  aspect_long <- aspect_data %>%
+    select(
+      review_id,
+      review_date,
+      year_label,
+      title,
+      review_text,
+      overall_rating,
+      score_afinn_number,
+      all_of(available_aspect_columns)
+    ) %>%
+    pivot_longer(
+      cols = all_of(available_aspect_columns),
+      names_to = "aspect_key",
+      values_to = "aspect_rating"
+    ) %>%
+    mutate(
+      aspect_label = factor(
+        aspect_rating_columns[aspect_key],
+        levels = unname(aspect_rating_columns)
+      )
+    )
+
+  # This table gives one summary row for each aspect. It includes:
+  # - coverage: how many reviews supplied that optional rating
+  # - mean and median: typical score
+  # - low-score share: how often guests gave that aspect a 1, 2, or 3
+  # - correlations: whether the aspect tends to move with overall rating or text sentiment
+  aspect_summary <- aspect_long %>%
+    group_by(aspect_key, aspect_label) %>%
+    summarise(
+      reviews_with_rating = sum(!is.na(aspect_rating)),
+      coverage_pct = mean(!is.na(aspect_rating)),
+      mean_rating = mean(aspect_rating, na.rm = TRUE),
+      median_rating = median(aspect_rating, na.rm = TRUE),
+      low_score_count = sum(aspect_rating <= 3, na.rm = TRUE),
+      low_score_share = if_else(reviews_with_rating > 0, low_score_count / reviews_with_rating, NA_real_),
+      very_low_score_count = sum(aspect_rating <= 2, na.rm = TRUE),
+      very_low_score_share = if_else(reviews_with_rating > 0, very_low_score_count / reviews_with_rating, NA_real_),
+      corr_overall_rating = safe_correlation(aspect_rating, overall_rating),
+      corr_afinn = safe_correlation(aspect_rating, score_afinn_number),
+      .groups = "drop"
+    ) %>%
+    arrange(mean_rating)
+
+  # Save a CSV report so the exact numbers behind the charts are easy to inspect
+  # or reuse in the methodology paper.
+  write_csv(
+    aspect_summary %>%
+      mutate(
+        coverage_pct = round(coverage_pct * 100, 1),
+        mean_rating = round(mean_rating, 2),
+        median_rating = round(median_rating, 2),
+        low_score_share = round(low_score_share * 100, 1),
+        very_low_score_share = round(very_low_score_share * 100, 1),
+        corr_overall_rating = round(corr_overall_rating, 2),
+        corr_afinn = round(corr_afinn, 2)
+      ),
+    file.path(reports_dir, "aspect_rating_summary.csv")
+  )
+
+  # These rows are important because they show satisfied guests who still
+  # reported a specific problem. Example: a 5-star review with Value = 2.
+  high_overall_low_aspect_reviews <- aspect_long %>%
+    filter(
+      !is.na(overall_rating),
+      overall_rating >= 4,
+      !is.na(aspect_rating),
+      aspect_rating <= 3
+    ) %>%
+    arrange(review_id, aspect_label) %>%
+    group_by(review_id) %>%
+    summarise(
+      review_date = first(review_date),
+      rating = first(overall_rating),
+      low_aspects = paste(paste0(aspect_label, "=", aspect_rating), collapse = "; "),
+      score_afinn = first(score_afinn_number),
+      title = first(title),
+      review_text = first(review_text),
+      .groups = "drop"
+    )
+
+  # Save those special cases for manual reading.
+  write_csv(
+    high_overall_low_aspect_reviews,
+    file.path(reports_dir, "high_overall_low_aspect_reviews.csv")
+  )
+
+  # Use consistent colors for the same aspects across every aspect chart.
+  aspect_colors <- c(
+    "Value" = "#E76F51",
+    "Rooms" = "#457B9D",
+    "Location" = "#2A9D8F",
+    "Cleanliness" = "#6D597A",
+    "Service" = "#264653",
+    "Sleep quality" = "#F4A261"
+  )
+
+  # Chart 1: show which aspect has the highest or lowest average rating.
+  p_aspect_mean <- ggplot(
+    aspect_summary,
+    aes(x = reorder(aspect_label, mean_rating), y = mean_rating, fill = aspect_label)
+  ) +
+    geom_col(width = 0.68, alpha = 0.88) +
+    geom_text(
+      aes(label = paste0(round(mean_rating, 2), " / 5\nn=", reviews_with_rating)),
+      hjust = -0.08,
+      fontface = "bold",
+      color = "#2C3E50",
+      size = 3
+    ) +
+    coord_flip() +
+    scale_fill_manual(values = aspect_colors) +
+    scale_y_continuous(limits = c(0, 5), expand = expansion(mult = c(0, 0.18))) +
+    labs(
+      title = "Average Guest Experience Aspect Ratings",
+      subtitle = "Structured TripAdvisor aspect scores show which experience dimensions are strongest or weakest",
+      x = "Aspect",
+      y = "Average rating"
+    ) +
+    theme_premium()
+
+  print(p_aspect_mean)
+
+  ggsave(file.path(figures_dir, "aspect_mean_ratings.png"), plot = p_aspect_mean, width = 8.5, height = 5.4, dpi = 300)
+
+  # Chart 2: show where low scores are concentrated. This can reveal a problem
+  # even if the average rating is still high.
+  p_aspect_low <- ggplot(
+    aspect_summary,
+    aes(x = reorder(aspect_label, low_score_share), y = low_score_share, fill = aspect_label)
+  ) +
+    geom_col(width = 0.68, alpha = 0.88) +
+    geom_text(
+      aes(label = paste0(scales::percent(low_score_share, accuracy = 0.1), "\nn=", low_score_count)),
+      hjust = -0.08,
+      fontface = "bold",
+      color = "#2C3E50",
+      size = 3
+    ) +
+    coord_flip() +
+    scale_fill_manual(values = aspect_colors) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.18))) +
+    labs(
+      title = "Low-Score Share by Guest Experience Aspect",
+      subtitle = "Low-score share counts aspect ratings from 1 to 3 stars",
+      x = "Aspect",
+      y = "Share of aspect ratings at 1-3 stars"
+    ) +
+    theme_premium()
+
+  print(p_aspect_low)
+
+  ggsave(file.path(figures_dir, "aspect_low_score_share.png"), plot = p_aspect_low, width = 8.5, height = 5.4, dpi = 300)
+
+  # Chart 3: summarize aspect ratings by year. Years with very few ratings are
+  # colored grey because tiny sample sizes should not be over-interpreted.
+  aspect_yearly <- aspect_long %>%
+    filter(!is.na(year_label), !is.na(aspect_rating)) %>%
+    group_by(year_label, aspect_label) %>%
+    summarise(
+      mean_rating = mean(aspect_rating),
+      review_count = n(),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      year_label = factor(year_label, levels = sort(unique(year_label))),
+      rating_for_fill = if_else(review_count >= 5, mean_rating, NA_real_),
+      heatmap_label = if_else(
+        review_count >= 5,
+        paste0(round(mean_rating, 1), "\nn=", review_count),
+        paste0("n=", review_count)
+      )
+    )
+
+  p_aspect_heatmap <- ggplot(aspect_yearly, aes(x = aspect_label, y = year_label, fill = rating_for_fill)) +
+    geom_tile(color = "white", linewidth = 0.4) +
+    geom_text(aes(label = heatmap_label), size = 2.3, color = "#2C3E50", lineheight = 0.85) +
+    scale_fill_gradient2(
+      low = "#E76F51",
+      mid = "#F7F9F9",
+      high = "#2A9D8F",
+      midpoint = 4,
+      limits = c(1, 5),
+      na.value = "#ECEFF1",
+      name = "Average\nrating"
+    ) +
+    labs(
+      title = "Yearly Aspect Rating Heatmap",
+      subtitle = "Grey tiles have fewer than 5 aspect ratings; labels show average rating and n when enough data exists",
+      x = "Aspect",
+      y = "Year"
+    ) +
+    theme_premium() +
+    theme(
+      legend.position = "right",
+      axis.text.x = element_text(angle = 35, hjust = 1)
+    )
+
+  print(p_aspect_heatmap)
+
+  ggsave(file.path(figures_dir, "aspect_yearly_rating_heatmap.png"), plot = p_aspect_heatmap, width = 10, height = 7, dpi = 300)
+
+  cat("Aspect rating analysis complete!\n")
+  cat("- ", file.path(reports_dir, "aspect_rating_summary.csv"), "\n", sep = "")
+  cat("- ", file.path(reports_dir, "high_overall_low_aspect_reviews.csv"), "\n", sep = "")
+} else {
+  warning("No structured aspect rating columns were found in the scored dataset.")
+}
+
+# =====================================================================
+# STEP 5: Draw the Deep Emotion Chart (Joy, Trust, Anger, etc.)
 # =====================================================================
 # We calculate the total sum of all the 8 emotions.
 emotions_summary <- research_data %>%
@@ -232,7 +515,7 @@ print(p2)
 ggsave(file.path(figures_dir, "emotions_breakdown.png"), plot = p2, width = 8, height = 5, dpi = 300)
 
 # =====================================================================
-# STEP 5: Draw the Word Cloud
+# STEP 6: Draw the Word Cloud
 # =====================================================================
 # This word cloud is sentiment-only.
 # That means we do NOT use every frequent word in the reviews.
@@ -299,7 +582,7 @@ wordcloud(
 dev.off() # Close the digital canvas and save the file!
 
 # =====================================================================
-# STEP 6: Draw Sentiment Trend Charts
+# STEP 7: Draw Sentiment Trend Charts
 # =====================================================================
 # We want to see if the hotel's review sentiment changes over time.
 # This section creates several different time-based charts because each chart
@@ -308,26 +591,6 @@ dev.off() # Close the digital canvas and save the file!
 # 2. Monthly rolling trend: Is sentiment moving up or down over time?
 # 3. Quarterly boxplot: How much do reviews vary inside each quarter?
 # 4. Yearly boxplot: How much do reviews vary inside each year?
-parse_review_dates <- function(date_values) {
-  # Dates can be written in different formats.
-  # This helper tries several common date formats until one works.
-  # suppressWarnings() keeps R from printing scary warning messages every time
-  # one date format does not match.
-  date_text <- as.character(date_values)
-  parsed <- as.Date(suppressWarnings(lubridate::ymd(date_text)))
-
-  missing_dates <- is.na(parsed)
-  parsed[missing_dates] <- as.Date(suppressWarnings(lubridate::mdy(date_text[missing_dates])))
-
-  missing_dates <- is.na(parsed)
-  parsed[missing_dates] <- as.Date(suppressWarnings(lubridate::dmy(date_text[missing_dates])))
-
-  missing_dates <- is.na(parsed)
-  parsed[missing_dates] <- as.Date(suppressWarnings(lubridate::my(date_text[missing_dates])))
-
-  parsed
-}
-
 trend_reviews <- research_data %>%
   mutate(
     # The TripAdvisor export may use full dates or month-year labels.
