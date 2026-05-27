@@ -2,19 +2,19 @@
 
 ## Abstract
 
-This report specifies a reproducible analytical framework for transforming online hotel reviews into structured sentiment evidence, and it presents the main descriptive outputs produced by that framework. The project uses a prepared TripAdvisor review corpus for Bvlgari Resort Bali and implements a staged R workflow for data validation, text preprocessing, lexicon-based sentiment scoring, emotion extraction, aspect-rating analysis, annual review profiling, and temporal visualization. The methodological design follows a single-case digital trace research strategy: one luxury resort is treated as a bounded case, while reviews are treated as naturally occurring electronic word-of-mouth records of guest experience. The final analytical dataset contains 762 TripAdvisor reviews from October 2006 to May 2026, including star ratings, review dates, stay dates, reviewer location, contribution counts, optional aspect ratings, cleaned review text, negation-adjusted Syuzhet sentiment scores, negation-adjusted AFINN sentiment scores, and NRC emotion scores.
+This report specifies a reproducible analytical framework for transforming online hotel reviews into structured sentiment evidence, and it presents the main descriptive outputs produced by that framework. The project uses a prepared TripAdvisor review corpus for Bvlgari Resort Bali and implements a staged R workflow for data validation, text preprocessing, lexicon-based sentiment scoring, emotion extraction, aspect-rating analysis, annual review profiling, and temporal visualization. The methodological design follows a single-case digital trace research strategy: one luxury resort is treated as a bounded case, while reviews are treated as naturally occurring electronic word-of-mouth records of guest experience (Filieri et al., 2015; Litvin, 2019). The final analytical dataset contains 762 TripAdvisor reviews from October 2006 to May 2026, including star ratings, review dates, stay dates, reviewer location, contribution counts, optional aspect ratings, cleaned review text, negation-adjusted Syuzhet sentiment scores, negation-adjusted AFINN sentiment scores, and NRC emotion scores.
 
 The implemented framework supports academic analysis of the relationship between numerical ratings, textual sentiment, emotion categories, service-quality dimensions, and time-based review patterns. It now also produces statistical period-monitoring outputs that compare review periods with prior history using length-normalized sentiment, medians, trimmed means, and robust median absolute deviation indicators. A management and investment decision layer is not currently implemented in the project code; it is presented as a future development path that would build on the existing analytical outputs.
 
-The paper also defines the study's limitations. Lexicon-based sentiment scoring is transparent and replicable, but it can misread sarcasm, complex negation, multilingual expressions, cultural context, and domain-specific meanings. TripAdvisor reviews are not a statistically representative sample of all guests, and observed sentiment is mediated by platform behavior, reviewer motivation, review timing, and unobserved operational conditions. For these reasons, the implemented methodology emphasizes triangulation across ratings, sentiment scores, aspect ratings, review text, and temporal patterns before any future management or investment conclusions are drawn.
+The paper also defines the study's limitations. Lexicon-based sentiment scoring is transparent and replicable, but it can misread sarcasm, complex negation, multilingual expressions, cultural context, and domain-specific meanings (Liu, 2020). TripAdvisor reviews are not a statistically representative sample of all guests, and observed sentiment is mediated by platform behavior, reviewer motivation, review timing, and unobserved operational conditions (Filieri et al., 2015; Litvin, 2019). For these reasons, the implemented methodology emphasizes triangulation across ratings, sentiment scores, aspect ratings, review text, and temporal patterns before any future management or investment conclusions are drawn.
 
 Keywords: TripAdvisor, sentiment analysis, hotel reviews, luxury resort, Bvlgari Resort Bali, electronic word of mouth, AFINN, Syuzhet, NRC Emotion Lexicon, service quality, annual review profile, temporal analysis, future decision support.
 
 ## 1. Introduction
 
-Online reviews have become a major source of evidence for tourism and hospitality research because they record guest evaluations in a natural digital setting. In luxury hospitality, reviews are especially valuable because guest satisfaction is shaped not only by functional quality but also by emotional experience, perceived exclusivity, value, personalization, aesthetics, privacy, and service recovery. A five-star property may maintain a high average rating while still accumulating text-based signs of dissatisfaction about value, maintenance, dining, staff coordination, or expectation mismatch. Conversely, a guest may give a modest numerical rating while writing positively about specific aspects of the experience. For this reason, rating-only analysis is methodologically incomplete.
+Online reviews have become a major source of evidence for tourism and hospitality research because they record guest evaluations in a natural digital setting and influence traveler trust, recommendation adoption, and word of mouth (Filieri et al., 2015). In luxury hospitality, reviews are especially valuable because guest satisfaction is shaped not only by functional quality but also by emotional experience, perceived exclusivity, value, personalization, aesthetics, privacy, and service recovery; hotel satisfaction and loyalty research has long emphasized the importance of service quality and image in shaping guest behavior (Kandampully & Suhartanto, 2000). A five-star property may maintain a high average rating while still accumulating text-based signs of dissatisfaction about value, maintenance, dining, staff coordination, or expectation mismatch. Conversely, a guest may give a modest numerical rating while writing positively about specific aspects of the experience. For this reason, rating-only analysis is methodologically incomplete.
 
-This project develops a sentiment-analysis methodology for Bvlgari Resort Bali using TripAdvisor review data. The implemented objective is not merely to classify reviews as positive or negative; it is to create a transparent analytical corpus that can support rating-sentiment comparison, emotion profiling, and temporal interpretation. The methodology is inspired by tourism sentiment studies that combine digital review corpora, text cleaning, lexicon-based scoring, temporal interpretation, and qualitative contextualization. The attached reference paper on informal language and cultural appreciation in TripAdvisor reviews of Balinese Ayam Betutu demonstrates a rigorous academic pattern that is also relevant here: define a bounded tourism object, analyze all accessible reviews in the selected corpus, preprocess text transparently, apply lexicon-based sentiment methods, visualize temporal patterns, interpret discrepancies between ratings and text, and state limitations clearly.
+This project develops a sentiment-analysis methodology for Bvlgari Resort Bali using TripAdvisor review data. The implemented objective is not merely to classify reviews as positive or negative; it is to create a transparent analytical corpus that can support rating-sentiment comparison, emotion profiling, and temporal interpretation. The methodology is inspired by tourism sentiment studies that combine digital review corpora, text cleaning, lexicon-based scoring, temporal interpretation, and qualitative contextualization (Adnyana et al., 2026; Liu, 2020). The attached reference paper on informal language and cultural appreciation in TripAdvisor reviews of Balinese Ayam Betutu demonstrates a rigorous academic pattern that is also relevant here: define a bounded tourism object, analyze all accessible reviews in the selected corpus, preprocess text transparently, apply lexicon-based sentiment methods, visualize temporal patterns, interpret discrepancies between ratings and text, and state limitations clearly (Adnyana et al., 2026).
 
 The present analytical framework extends that type of approach to a luxury-hotel case. The current codebase produces cleaned data, scored sentiment outputs, annual review-profile summaries, aspect-rating diagnostics, and visual trend artifacts. A further decision-support layer is proposed as future work: rather than stopping at descriptive sentiment results, a future version could formalize what should happen when the rating or sentiment of reviews drifts away from a baseline over a number of periods. That future extension would require baseline definition, period aggregation, drift thresholds, confidence rules, and action pathways that are not yet coded in the repository.
 
@@ -38,11 +38,11 @@ The methodology is therefore primarily analytical. It explains how the data are 
 
 ### 3.1 Digital Trace Single-Case Study
 
-The study uses a single-case digital trace design. Bvlgari Resort Bali is treated as the focal case, and TripAdvisor reviews are treated as digital traces of guest experience. A single-case design is appropriate because luxury resorts are highly context-dependent: the brand promise, location, villa format, service model, butler experience, food and beverage offer, price point, and guest expectations are all specific to the property. A multi-hotel design would support broader generalization, but it would weaken the property-specific interpretation needed for any later decision-support extension.
+The study uses a single-case digital trace design. Bvlgari Resort Bali is treated as the focal case, and TripAdvisor reviews are treated as digital traces of guest experience and electronic word of mouth (Filieri et al., 2015). A single-case design is appropriate because luxury resorts are highly context-dependent: the brand promise, location, villa format, service model, butler experience, food and beverage offer, price point, and guest expectations are all specific to the property. Cultural differences can also shape how travelers write and interpret TripAdvisor hotel reviews, which makes context-specific interpretation important (Litvin, 2019). A multi-hotel design would support broader generalization, but it would weaken the property-specific interpretation needed for any later decision-support extension.
 
 ### 3.2 Mixed Quantitative and Qualitative Logic
 
-The project combines quantitative and qualitative logic. The quantitative component includes star ratings, aspect ratings, sentiment scores, emotion counts, review counts, period averages, medians, and trend indicators. The qualitative component remains embedded in the review text: low-scoring periods, outlier reviews, and divergent rating-sentiment cases must be interpreted by reading the guest narratives. This mixed logic is important because sentiment scores can identify where to look, but the actual operational cause is usually found in the text.
+The project combines quantitative and qualitative logic. The quantitative component includes star ratings, aspect ratings, sentiment scores, emotion counts, review counts, period averages, medians, and trend indicators. The qualitative component remains embedded in the review text: low-scoring periods, outlier reviews, and divergent rating-sentiment cases must be interpreted by reading the guest narratives. This mixed logic follows the caution in sentiment-analysis research that automated scores should support interpretation rather than replace close reading of context (Adnyana et al., 2026; Liu, 2020).
 
 ### 3.3 Reproducible Computational Workflow
 
@@ -60,9 +60,19 @@ The workflow is implemented in R through separate scripts:
 
 This modular design improves transparency because each methodological stage can be inspected, rerun, and modified independently.
 
+The current repository also tracks the principal analytical outputs produced by these scripts. This is important for reproducibility because a reader can inspect both the source code and the generated evidence tables without rerunning the full workflow.
+
+| Output group | Key files | Analytical role |
+|---|---|---|
+| Cleaned datasets | `data/cleaned/hotel_cleaned_reviews.csv`, `data/cleaned/hotel_cleaned_tokens.csv`, `data/cleaned/hotel_sentiment_scores.csv` | Preserve the cleaned text, tokenized words, sentiment scores, emotion counts, and retained non-identifying metadata used in later analysis. |
+| Temporal and geographic summaries | `output/reports/annual_review_profile.csv`, `output/reports/sentiment_period_summary.csv` | Summarize year-level review volume, reviewer geography, rating distributions, and period-level sentiment or rating drift metrics. |
+| Aspect-rating summaries | `output/reports/aspect_rating_summary.csv`, `output/reports/high_overall_low_aspect_reviews.csv` | Compare structured aspect ratings and identify high-overall-rating reviews that still contain low aspect scores. |
+| Aspect-text diagnostics | `output/reports/aspect_text_alignment.csv`, `output/reports/aspect_text_band_summary.csv`, `output/reports/aspect_text_key_terms.csv`, `output/reports/aspect_text_key_phrases.csv`, `output/reports/aspect_text_mismatches.csv`, `output/reports/aspect_qualitative_examples.csv` | Link aspect ratings to review text, extract low-aspect terms and phrases, identify signal mismatches, and support qualitative reading. |
+| Figures | `output/figures/*.png` | Provide visual checks of sentiment distribution, rating-sentiment alignment, aspect ratings, aspect-text signals, emotion profiles, word clouds, temporal trends, and drift monitoring. |
+
 ## 4. Case Selection
 
-Bvlgari Resort Bali is selected as a luxury-hotel case because its market position depends heavily on intangible experience attributes: exclusivity, privacy, aesthetics, personalized service, food and beverage quality, spa and leisure amenities, room and villa quality, and perceived value. These dimensions are well suited to review-based analysis because guests often describe them in narrative form.
+Bvlgari Resort Bali is selected as a luxury-hotel case because its market position depends heavily on intangible experience attributes: exclusivity, privacy, aesthetics, personalized service, food and beverage quality, spa and leisure amenities, room and villa quality, and perceived value. These dimensions are well suited to review-based analysis because guests often describe them in narrative form, and hospitality research links service quality, atmosphere, and related experience dimensions to revisit and satisfaction outcomes (Bichler et al., 2021; Kandampully & Suhartanto, 2000).
 
 The single-property focus also supports future management relevance. A general hotel sentiment model can describe broad industry patterns, but managers need property-specific evidence. For example, an observed decline in sentiment could imply different follow-up questions depending on whether the associated text concerns butler service, dining price, villa maintenance, cleanliness, privacy, buggy transport, beach access, or value perception. The current project surfaces these analytical signals; it does not yet automate managerial recommendations.
 
@@ -70,7 +80,7 @@ The single-property focus also supports future management relevance. A general h
 
 ### 5.1 Raw Dataset
 
-The project uses a prepared TripAdvisor review CSV located at `data/raw/reviews.csv`. The import script validates that the file exists and contains required columns:
+The project uses a prepared TripAdvisor review CSV located at `data/raw/reviews.csv`. The import script validates that the file exists and contains the minimum required columns needed for the core workflow:
 
 - `review_id`
 - `hotel_name`
@@ -81,11 +91,13 @@ The project uses a prepared TripAdvisor review CSV located at `data/raw/reviews.
 - `stay_date`
 - `trip_type`
 
+This list is the minimum import contract, not the full analytical schema. The current dataset also contains optional fields that are used when available, including `reviewer_location`, `reviewer_contributions`, `insider_tip`, `source`, and the six structured aspect-rating columns for value, rooms, location, cleanliness, service, and sleep quality. The `reviewer_location` column is present in the current corpus and is retained for aggregate geographic profiling, but it is not required because the cleaning, sentiment, and aspect-rating workflow can still run on a prepared review file that lacks reviewer geography.
+
 The current raw dataset contains 762 rows and 20 source columns after removing direct reviewer names and source-response metadata while retaining reviewer location for aggregate geographic profiling. All rows are associated with Bvlgari Resort Bali and have non-empty review text. The final sentiment-scored dataset contains 762 rows and 38 columns.
 
 ### 5.2 Temporal Coverage
 
-The review-date range in the current dataset is October 2006 to May 18, 2026. The stay-date range is September 2006 to May 2026. This long time span enables longitudinal analysis, but it also creates methodological challenges. TripAdvisor platform design, guest demographics, hotel operations, travel patterns, and global tourism conditions changed substantially over this period. Therefore, long-term trend interpretation must consider context and should not treat all periods as directly comparable.
+The review-date range in the current dataset is October 2006 to May 18, 2026. The stay-date range is September 2006 to May 2026. This long time span enables longitudinal analysis, but it also creates methodological challenges. TripAdvisor platform design, guest demographics, hotel operations, travel patterns, and global tourism conditions changed substantially over this period. Because TripAdvisor reviews are shaped by platform trust, reviewer behavior, and cultural context, long-term trend interpretation must consider context and should not treat all periods as directly comparable (Filieri et al., 2015; Litvin, 2019).
 
 ### 5.3 Data Fields
 
@@ -98,9 +110,9 @@ The raw corpus includes both narrative and structured fields:
 | Rating fields | `rating`, `value_rating`, `rooms_rating`, `location_rating`, `cleanliness_rating`, `service_rating`, `sleep_quality_rating` | Rating-sentiment comparison and aspect-level diagnosis. |
 | Time fields | `review_date`, `review_date_raw`, `stay_date` | Monthly, quarterly, yearly, and rolling trend analysis. |
 | Reviewer context | `reviewer_location`, `reviewer_contributions`, `trip_type` | Aggregate geographic profiling and optional segmentation without retaining reviewer names. |
-| Operational hints | `insider_tip`, `page_offset` | Supplementary context and data provenance. |
+| Operational hints | `insider_tip` | Supplementary guest context when present. |
 
-Direct reviewer identifiers, including bare `author`, `reviewer`, `reviewer_name`, profile IDs, and profile URLs, are removed from the tracked analysis datasets because they are not required for the implemented aggregate analysis. The `reviewer_location` field is retained because the annual profile uses it only in aggregate form. Academic and managerial outputs should avoid person-level reviewer disclosure unless explicit permission exists.
+Direct reviewer identifiers, including bare `author`, `reviewer`, `reviewer_name`, profile IDs, and profile URLs, are removed from the tracked analysis datasets because they are not required for the implemented aggregate analysis. The `reviewer_location` field is retained because the annual profile uses it only in aggregate form. The validation and standardization code treats `reviewer_location` as the only reviewer-geography field allowed into the analysis schema; non-whitelisted variants such as `user_location`, `author_location`, `member_location`, and `profile_location` are rejected or dropped. Common source-column aliases such as `Reviewer Location` and `reviewerLocation` are canonicalized to `reviewer_location` so the annual profile remains stable across export formats. Academic and managerial outputs should avoid person-level reviewer disclosure unless explicit permission exists.
 
 ### 5.4 Corpus Summary
 
@@ -158,7 +170,7 @@ The workflow writes `output/reports/annual_review_profile.csv` to summarize the 
 | 2006 | 3 | No region reached the minimum review count | 5.00 | 3 | 0 | 0 | 0 | 0 |
 | Total | 762 | Unknown (178), Singapore, Singapore (45), Jakarta, Indonesia (23), Sydney, Australia (20), plus 67 other locations | 4.56 | 596 | 77 | 38 | 22 | 29 |
 
-The annual profile shows that the dataset is not evenly distributed across time. Review volume is highest in 2016, 2017, 2018, and the partial 2026 period. Years with very low volume, such as 2006 and 2007, should be interpreted cautiously because a small number of reviews can move the annual average sharply. The rating distribution is also highly skewed: 596 of 762 reviews are five-star reviews, while 89 reviews are rated one to three stars. This skew supports the decision to examine low-rating shares, sentiment distributions, and text-level complaints rather than relying only on the overall mean rating.
+The annual profile shows that the dataset is not evenly distributed across time. Review volume is highest in 2016, 2017, 2018, and the partial 2026 period. Years with very low volume, such as 2006 and 2007, should be interpreted cautiously because a small number of reviews can move the annual average sharply. This annual profiling approach follows the temporal-summary logic used in the reference TripAdvisor sentiment study (Adnyana et al., 2026). The rating distribution is also highly skewed: 596 of 762 reviews are five-star reviews, while 89 reviews are rated one to three stars. This skew supports the decision to examine low-rating shares, sentiment distributions, and text-level complaints rather than relying only on the overall mean rating.
 
 The reviewer-location profile indicates broad international reach, with Singapore, Jakarta, Sydney, Hong Kong, London, and other major travel markets appearing repeatedly in the table. However, 178 reviews have missing reviewer location, and recent years contain a particularly high share of `Unknown` locations. Therefore, reviewer geography should be treated as contextual evidence about the visible reviewer base, not as a representative market-origin distribution.
 
@@ -181,7 +193,7 @@ Substantive aspect findings are presented later in the analytical sequence, afte
 
 ## 6. Data Validation and Standardization
 
-The first methodological stage is validation. `01_data_import.R` checks that the prepared CSV exists, has non-zero file size, includes required columns, contains rows with review text, identifies Bvlgari Resort Bali as the only analyzed property, and omits direct reviewer identifiers, forbidden source metadata, TripAdvisor source-disclosure text in trip type values, and embedded contact markers from any raw column. This step prevents downstream scripts from silently analyzing an incomplete, malformed, mixed-property, or privacy-inappropriate file.
+The first methodological stage is validation. `01_data_import.R` checks that the prepared CSV exists, has non-zero file size, includes required columns, contains rows with review text, identifies Bvlgari Resort Bali as the only analyzed property, and omits direct reviewer identifiers, forbidden source metadata, TripAdvisor source-disclosure text in trip type values, and embedded contact markers from any raw column. The only reviewer-location field allowed through this gate is `reviewer_location`, which is used for aggregate annual geography only. This step prevents downstream scripts from silently analyzing an incomplete, malformed, mixed-property, or privacy-inappropriate file.
 
 The second stage is schema standardization. The helper function `standardize_hotel_reviews()` maps source-specific column names into a consistent internal structure:
 
@@ -231,19 +243,21 @@ The cleaned review text is tokenized using `tidytext::unnest_tokens()`, creating
 
 ### 7.4 Stopword Removal
 
-Stopwords are removed using the `tidytext` stopword list. This reduces the influence of high-frequency function words such as "the", "and", and "is". Stopword removal is appropriate for word-frequency visualization but should not be used blindly for every NLP task. Some function words can matter for negation, modality, or phrase-level meaning. Because this project uses lexicon-based word matching, stopword removal is primarily used for token-level summaries rather than for preserving syntactic structure.
+Stopwords are removed using the `tidytext` stopword list. This reduces the influence of high-frequency function words such as "the", "and", and "is". Stopword removal is appropriate for word-frequency visualization but should not be used blindly for every NLP task. Some function words can matter for negation, modality, or phrase-level meaning. Because this project uses lexicon-based word matching, stopword removal is primarily used for token-level summaries rather than for preserving syntactic structure, following tidy text principles for transparent token-level analysis (Silge & Robinson, 2016).
+
+![Figure 1. Sentiment-bearing word cloud after text cleaning and filtering.](../figures/wordcloud.png)
 
 ## 8. Sentiment and Emotion Scoring
 
 ### 8.1 Lexicon-Based Sentiment Rationale
 
-The study uses lexicon-based sentiment analysis because it is transparent, replicable, and suitable for educational settings. A lexicon approach maps words to preassigned sentiment or emotion values. Unlike black-box machine-learning models, lexicon results can be inspected and explained to non-technical stakeholders. This transparency would also be useful if a future management or investment decision-support layer were added.
+The study uses lexicon-based sentiment analysis because it is transparent, replicable, and suitable for educational settings. A lexicon approach maps words to preassigned sentiment or emotion values, a standard family of methods in sentiment-analysis research (Liu, 2020). Unlike black-box machine-learning models, lexicon results can be inspected and explained to non-technical stakeholders. This transparency would also be useful if a future management or investment decision-support layer were added.
 
-The limitation is that lexicons may not fully capture sarcasm, idioms, multilingual content, domain-specific meanings, complex negation, or context-dependent sentiment. For instance, a word that is negative in a political context may be neutral in a hotel context. The visualization script explicitly excludes some domain-neutral terms from sentiment word clouds when their lexicon meaning is inappropriate for hotel reviews.
+The limitation is that lexicons may not fully capture sarcasm, idioms, multilingual content, domain-specific meanings, complex negation, or context-dependent sentiment (Liu, 2020). For instance, a word that is negative in a political context may be neutral in a hotel context. Cultural differences in review expression can also affect hotel-review interpretation (Litvin, 2019). The visualization script explicitly excludes some domain-neutral terms from sentiment word clouds when their lexicon meaning is inappropriate for hotel reviews.
 
 ### 8.2 Syuzhet Score
 
-The Syuzhet score is calculated with the project's `score_negation_aware_sentiment()` helper using the Syuzhet lexicon. The helper scores each word, then reverses sentiment-bearing words that appear shortly after simple negators such as "not", "never", "without", and "cannot". This prevents phrases such as "cannot recommend" from being treated as positive only because "recommend" is a positive lexicon word. The resulting Syuzhet score provides a continuous sentiment estimate for each cleaned review. The project uses the Syuzhet score to classify reviews into:
+The Syuzhet score is calculated with the project's `score_negation_aware_sentiment()` helper using the Syuzhet lexicon. The helper scores each word, then reverses sentiment-bearing words that appear shortly after simple negators such as "not", "never", "without", and "cannot". This prevents phrases such as "cannot recommend" from being treated as positive only because "recommend" is a positive lexicon word. The resulting Syuzhet score provides a continuous sentiment estimate for each cleaned review, consistent with lexicon-based scoring principles described in sentiment-analysis literature (Liu, 2020). The project uses the Syuzhet score to classify reviews into:
 
 - Positive: Syuzhet score greater than 0
 - Negative: Syuzhet score less than 0
@@ -251,9 +265,11 @@ The Syuzhet score is calculated with the project's `score_negation_aware_sentime
 
 This classification is simple and transparent, but it should not be overinterpreted. A very slightly positive score and a strongly positive score are both labeled positive, so the continuous score should be retained for analysis. In the aspect-text diagnostics, Syuzhet is also normalized to the dataset's median cleaned review length before aspect-level averaging so that longer reviews do not automatically receive larger aspect sentiment means.
 
+![Figure 2. Distribution of positive, neutral, and negative review sentiment labels.](../figures/sentiment_distribution.png)
+
 ### 8.3 AFINN Score
 
-The AFINN score is calculated with the same `score_negation_aware_sentiment()` helper using the AFINN lexicon. AFINN assigns integer valence values to sentiment-bearing words and sums them across text after the simple negation adjustment. In this project, AFINN is especially useful for:
+The AFINN score is calculated with the same `score_negation_aware_sentiment()` helper using the AFINN lexicon. AFINN assigns integer valence values to sentiment-bearing words and sums them across text after the simple negation adjustment (Nielsen, 2011). In this project, AFINN is especially useful for:
 
 - Rating-sentiment boxplots.
 - Monthly, quarterly, and yearly trend charts, after normalizing AFINN to the median cleaned review length.
@@ -265,7 +281,7 @@ Summed AFINN scores are sensitive to review length because longer reviews contai
 
 ### 8.4 NRC Emotion Scores
 
-The NRC emotion extraction is performed using `get_nrc_sentiment()`. It produces counts for the following emotion dimensions:
+The NRC emotion extraction is performed using `get_nrc_sentiment()`. The underlying NRC Emotion Lexicon is designed to associate words with positive and negative sentiment as well as basic emotion categories (Mohammad & Turney, 2013). It produces counts for the following emotion dimensions:
 
 - anger
 - anticipation
@@ -277,6 +293,8 @@ The NRC emotion extraction is performed using `get_nrc_sentiment()`. It produces
 - trust
 
 It also produces positive and negative word counts. Emotion categories are useful for future operational interpretation because they distinguish different types of dissatisfaction. For example, anger may indicate service failure or perceived unfairness, disgust may indicate cleanliness or food-quality issues, fear may indicate safety or uncertainty, and sadness may indicate disappointment relative to expectations. These interpretations should be verified through the text rather than inferred from emotion labels alone.
+
+![Figure 3. NRC emotion-category counts across the review corpus.](../figures/emotions_breakdown.png)
 
 ## 9. Rating-Sentiment Alignment
 
@@ -290,9 +308,11 @@ The project produces a rating-sentiment boxplot that groups AFINN scores by Trip
 
 For future management interpretation, rating-sentiment divergence may be more useful than average sentiment. A five-star review that contains negative comments about dining, value, or room maintenance could serve as an early warning before the numerical rating declines. The current project visualizes this relationship but does not yet implement automated warning logic.
 
+![Figure 4. Distribution of AFINN text sentiment by TripAdvisor star rating.](../figures/sentiment_by_rating_boxplot.png)
+
 ## 10. Aspect-Rating Analysis
 
-The corpus includes optional aspect ratings for value, rooms, location, cleanliness, service, and sleep quality. These aspect ratings provide a bridge between unstructured text and operational departments.
+The corpus includes optional aspect ratings for value, rooms, location, cleanliness, service, and sleep quality. These aspect ratings provide a bridge between unstructured text and operational departments, which is relevant because hospitality service-quality research treats experience dimensions as distinct drivers of guest satisfaction and revisit behavior (Bichler et al., 2021; Kandampully & Suhartanto, 2000).
 
 The implemented visualization workflow now treats aspect ratings as part of the core analysis rather than as a future extension. It generates an aspect summary table, a low-score table, a yearly aspect-rating heatmap, and a list of reviews where the overall rating is high but at least one aspect rating is low.
 
@@ -309,7 +329,13 @@ Aspect ratings should be interpreted with two statistics rather than one. The me
 
 In this dataset, value is the weakest structured dimension: it has the lowest mean rating and the highest low-score share. Methodologically, this does not automatically imply a pricing problem, but it does identify value perception as an important diagnostic area for qualitative review. Service is the strongest structured dimension, with the highest mean and the lowest low-score share.
 
+![Figure 5. Mean structured aspect ratings by guest-experience dimension.](../figures/aspect_mean_ratings.png)
+
+![Figure 6. Share of low structured aspect ratings by guest-experience dimension.](../figures/aspect_low_score_share.png)
+
 The project also generates a review-level table for cases where the overall rating is high, but at least one aspect rating is low. In the current corpus, 60 reviews have an overall rating of 4 or 5 while reporting at least one aspect score of 3 or lower. These reviews are analytically important because they show mostly satisfied guests who still signaled specific weaknesses. For example, a five-star review with a low value score may reflect admiration for the property but hesitation about price fairness, inclusions, or expectation setting.
+
+![Figure 7. Yearly structured aspect-rating heatmap with available rating counts.](../figures/aspect_yearly_rating_heatmap.png)
 
 For future management interpretation, aspect ratings should be mapped to likely operational domains:
 
@@ -332,7 +358,32 @@ The current workflow now implements that linkage in `05_aspect_text_analysis.R`.
 4. Qualitative review examples that support manual reading of low-aspect cases.
 5. Visualizations including aspect sentiment boxplots, low-score word and phrase charts, a negative-term heatmap, and mismatch count charts.
 
-The interpretation remains cautious. Aspect ratings apply to whole reviews, not individual sentences. Therefore, a word associated with low service ratings should be described as service-associated text, not as definitive evidence that the word refers only to service. This distinction is important for academic validity and for responsible managerial use.
+The current aspect-text outputs show why this middle layer is useful. `aspect_text_band_summary.csv` shows that low-aspect reviews have substantially lower median-length-normalized AFINN sentiment and higher negative-text shares than high-aspect reviews across every structured dimension:
+
+![Figure 8. Whole-review text sentiment distribution by structured aspect-rating level.](../figures/aspect_sentiment_by_rating_boxplot.png)
+
+| Aspect | High-aspect mean AFINN | Low-aspect mean AFINN | High-aspect negative-text share | Low-aspect negative-text share |
+|---|---:|---:|---:|---:|
+| Value | 20.72 | 7.96 | 1.6% | 10.6% |
+| Rooms | 18.63 | 3.25 | 2.5% | 15.0% |
+| Location | 18.28 | 8.34 | 2.3% | 18.4% |
+| Cleanliness | 18.55 | 3.84 | 1.7% | 22.9% |
+| Service | 18.30 | 4.25 | 2.2% | 23.5% |
+| Sleep quality | 19.50 | 2.86 | 2.1% | 27.6% |
+
+The low-aspect key-term and key-phrase tables also surface interpretable weak-label signals. For example, value-related low-score reviews emphasize terms and phrases such as `overpriced`, `difficult`, `not worth`, `not cleaned`, and `not return`. These terms should not be treated as automatic causal proof, but they are useful pointers for manual review, consistent with the broader sentiment-analysis caution that lexical evidence requires contextual interpretation (Liu, 2020).
+
+![Figure 9. Terms appearing unusually often in low-aspect reviews.](../figures/aspect_low_score_key_terms.png)
+
+![Figure 10. Two-word phrases appearing unusually often in low-aspect reviews.](../figures/aspect_low_score_key_phrases.png)
+
+![Figure 11. Negative sentiment terms associated with low-aspect review text.](../figures/aspect_negative_term_heatmap.png)
+
+The mismatch table adds another layer of interpretation. `aspect_text_mismatches.csv` currently contains 320 aspect-review rows with at least one signal disagreement. Because a single row can have more than one mismatch type, the categories overlap: 205 rows have low aspect ratings with positive text sentiment, 100 rows have low overall ratings with high aspect ratings, 80 rows have high overall ratings with low aspect ratings, and 37 rows have high aspect ratings with negative text sentiment. The largest mismatch counts appear in Value (78), Location (61), Service (54), Rooms (51), Cleanliness (42), and Sleep quality (34). These cases should be read qualitatively because they often contain the nuance that aggregate averages hide.
+
+![Figure 12. Aspect-text mismatch counts by aspect and mismatch type.](../figures/aspect_text_mismatch_counts.png)
+
+The interpretation remains cautious. Aspect ratings apply to whole reviews, not individual sentences. Therefore, a word associated with low service ratings should be described as service-associated text, not as definitive evidence that the word refers only to service. This distinction is important for academic validity and for responsible managerial use because automated sentiment features can identify patterns but do not by themselves establish causality or operational root cause (Liu, 2020).
 
 ## 11. Temporal Analysis
 
@@ -364,9 +415,17 @@ The project generates:
 - Quarterly sentiment distribution.
 - Yearly sentiment distribution.
 
+![Figure 13. Monthly median-length-normalized sentiment heatmap.](../figures/sentiment_trend_monthly_heatmap.png)
+
+![Figure 14. Quarterly distribution of median-length-normalized AFINN sentiment.](../figures/sentiment_trend_quarterly.png)
+
+![Figure 15. Yearly distribution of median-length-normalized AFINN sentiment.](../figures/sentiment_trend_yearly.png)
+
 ### 11.3 Rolling Average and Prior Average
 
-The monthly rolling chart uses a six-month rolling average. This smooths noisy month-level changes, especially when some months have few reviews. The script also computes a prior average, defined as the average sentiment before the current period. This avoids comparing a period to a future-informed all-time average. If decision-support functionality is later implemented, prior baselines would be more realistic because managers only know past performance at the time a decision is made.
+The monthly rolling chart uses a six-month rolling average. This smooths noisy month-level changes, especially when some months have few reviews. The script also computes a prior average, defined as the average sentiment before the current period. This avoids comparing a period to a future-informed all-time average. If decision-support functionality is later implemented, prior baselines would be more realistic because managers only know past performance at the time a decision is made. The need for cautious temporal interpretation is reinforced by research showing that platform context and cultural review behavior can affect TripAdvisor hotel-review patterns (Filieri et al., 2015; Litvin, 2019).
+
+![Figure 16. Monthly sentiment points, six-month rolling average, and prior-average baseline.](../figures/sentiment_trend_monthly_rolling.png)
 
 ## 12. Statistical Drift Monitoring and Future Decision Support
 
@@ -398,6 +457,10 @@ The visualization script writes `output/reports/sentiment_period_summary.csv`. F
 - Statistical drift flags for unusually low sentiment or rating periods.
 
 The review count is treated as a required confidence input. A period with two reviews should not be interpreted the same way as a period with fifty reviews unless the content indicates a severe risk.
+
+The current `sentiment_period_summary.csv` contains 286 month, quarter, and year rows. Under the implemented minimum-volume and robust-z rules, no period is currently flagged as a statistical drift period. This should be interpreted narrowly: it means the coded statistical monitor did not find a period that crossed its current robust threshold, not that the property has no operational issues. The aspect-text and qualitative-review outputs still identify specific reviews and aspect dimensions that deserve manual interpretation.
+
+![Figure 17. Monthly robust sentiment-drift monitor using prior review history.](../figures/sentiment_drift_monitor.png)
 
 ### 12.3 Baseline Definitions
 
@@ -461,7 +524,7 @@ This would prevent overreaction to thin data. However, severe complaints involvi
 
 ## 13. Future Work: Pattern-to-Action Interpretation
 
-Pattern-to-action mapping is not currently implemented in the repository. It is a proposed future layer that could be developed after the statistical drift outputs are validated and trigger-state rules are defined. The current drift metrics become managerially useful only when different patterns are mapped to different action pathways.
+Pattern-to-action mapping is not currently implemented in the repository. It is a proposed future layer that could be developed after the statistical drift outputs are validated and trigger-state rules are defined. The current drift metrics become managerially useful only when different patterns are mapped to different action pathways. This proposed direction is grounded in hospitality research linking service quality, image, and guest experience to satisfaction, loyalty, and revisit behavior (Bichler et al., 2021; Kandampully & Suhartanto, 2000).
 
 | Observed pattern | Likely interpretation | Illustrative management response | Illustrative investment response |
 |---|---|---|---|
@@ -487,7 +550,7 @@ When the statistical drift monitor flags a period, it should always be followed 
 6. Assign each controllable theme to an operational owner.
 7. Track whether the theme persists after intervention.
 
-This qualitative step would protect the method from false precision. A negative score can show where to look, but the review text explains what actually happened.
+This qualitative step would protect the method from false precision. A negative score can show where to look, but the review text explains what actually happened. This follows the interpretive logic of the reference TripAdvisor sentiment study, which combines lexical sentiment results with qualitative reading of review language and context (Adnyana et al., 2026).
 
 ## 15. Visualization Strategy
 
@@ -519,11 +582,11 @@ Visualizations should be interpreted as analytical aids, not as evidence by them
 
 ### 16.1 Reliability
 
-Reliability is supported by scripted preprocessing, centralized configuration, deterministic cleaning rules, and reproducible outputs. The same raw CSV and scripts should produce the same cleaned and scored files.
+Reliability is supported by scripted preprocessing, centralized configuration, deterministic cleaning rules, and reproducible outputs. The same raw CSV and scripts should produce the same cleaned and scored files. The use of tidy data principles also supports repeatable text-mining workflows because each token, review, and score is represented in an inspectable tabular form (Silge & Robinson, 2016).
 
 ### 16.2 Construct Validity
 
-Construct validity is strengthened by measuring guest experience through multiple indicators:
+Construct validity is strengthened by measuring guest experience through multiple indicators, which reduces dependence on any single sentiment score or rating field:
 
 - Star rating.
 - Textual sentiment.
@@ -536,15 +599,15 @@ No single indicator is treated as sufficient. For example, a decline in average 
 
 ### 16.3 Internal Validation
 
-Internal validation is achieved through triangulation across lexicons and structured ratings. If ratings, AFINN scores, Syuzhet scores, and negative-emotion counts all move in the same direction, confidence increases. If they diverge, the divergence itself becomes an analytical finding.
+Internal validation is achieved through triangulation across lexicons and structured ratings. If ratings, AFINN scores, Syuzhet scores, and negative-emotion counts all move in the same direction, confidence increases. If they diverge, the divergence itself becomes an analytical finding. This triangulation is appropriate because sentiment-analysis methods are useful but imperfect proxies for human opinion and emotion (Liu, 2020).
 
 ### 16.4 External Validity
 
-External validity is limited because the study focuses on one luxury resort and one review platform. The analytical workflow can be adapted to other hotels, but any future drift thresholds and interpretation rules should be recalibrated for each property's review volume, market segment, language mix, and brand promise.
+External validity is limited because the study focuses on one luxury resort and one review platform. The analytical workflow can be adapted to other hotels, but any future drift thresholds and interpretation rules should be recalibrated for each property's review volume, market segment, language mix, and brand promise. This caution is consistent with evidence that TripAdvisor hotel reviews are shaped by traveler trust, platform behavior, and cultural differences in review expression (Filieri et al., 2015; Litvin, 2019).
 
 ## 17. Ethical and Data Governance Considerations
 
-The project uses online review data, but public availability does not remove ethical responsibility. The following safeguards are recommended:
+The project uses online review data, but public availability does not remove ethical responsibility. Because TripAdvisor reviews can influence traveler trust and business reputation, review analytics should report aggregate evidence carefully and avoid unnecessary person-level disclosure (Filieri et al., 2015). The following safeguards are recommended:
 
 1. Report aggregate patterns rather than identifying individual reviewers.
 2. Avoid quoting long review passages unless necessary and properly attributed.
@@ -560,11 +623,11 @@ The ethical stance is particularly important because luxury-hotel reviews may in
 
 Several limitations must be acknowledged.
 
-First, TripAdvisor reviewers are self-selected. They may not represent all guests, and review behavior may vary by nationality, age, travel purpose, satisfaction intensity, and digital habits.
+First, TripAdvisor reviewers are self-selected. They may not represent all guests, and review behavior may vary by nationality, age, travel purpose, satisfaction intensity, cultural background, and digital habits (Filieri et al., 2015; Litvin, 2019).
 
 Second, star ratings are skewed toward positive evaluations. In this corpus, the median rating is 5.0, which means small declines in the average may matter even when the overall rating remains high.
 
-Third, lexicon-based sentiment analysis can misinterpret context. The implemented scoring now handles simple local negation windows, but it may still struggle with sarcasm, complex negation, multilingual content, idioms, local cultural terms, and luxury-hospitality vocabulary.
+Third, lexicon-based sentiment analysis can misinterpret context. The implemented scoring now handles simple local negation windows, but it may still struggle with sarcasm, complex negation, multilingual content, idioms, local cultural terms, and luxury-hospitality vocabulary (Liu, 2020).
 
 Fourth, summed AFINN and Syuzhet scores are influenced by review length. Longer reviews may receive larger positive or negative totals simply because they contain more sentiment words. The trend charts and aspect-text diagnostic summaries reduce this problem by scaling sentiment to the dataset's median cleaned review length where period or aspect means are compared. Any remaining displays that use summed sentiment scores should still be read with review length in mind.
 
@@ -572,7 +635,7 @@ Fifth, review dates may not equal stay dates. A guest may post a review weeks or
 
 Sixth, platform and scraping conditions may affect what data are available. Historical reviews, hidden text, management responses, translated reviews, or deleted reviews may not be consistently captured.
 
-Seventh, investment decisions require financial data not present in the review corpus. Sentiment can identify demand-side pain points and experience drivers, but it cannot by itself estimate return on investment. A future investment layer would need to combine review analytics with occupancy, ADR, RevPAR, margin, capex cost, maintenance logs, complaint records, and competitive benchmarking.
+Seventh, investment decisions require financial data not present in the review corpus. Sentiment can identify demand-side pain points and experience drivers, but it cannot by itself estimate return on investment. A future investment layer would need to combine review analytics with occupancy, ADR, RevPAR, margin, capex cost, maintenance logs, complaint records, and competitive benchmarking. The link from guest experience to business outcomes is plausible in hospitality research, but the financial inference would require data beyond text reviews (Kandampully & Suhartanto, 2000).
 
 ## 19. Recommended Extensions
 
@@ -595,7 +658,7 @@ The current methodology can be extended in several ways:
 
 ## 20. Conclusion
 
-This methodology transforms TripAdvisor reviews of Bvlgari Resort Bali into a structured research dataset and visualization workflow. It begins with data validation and text preprocessing, applies multiple lexicon-based sentiment and emotion measures, compares text sentiment with star and aspect ratings, visualizes sentiment patterns over time, and produces robust period-monitoring outputs. The current project does not yet implement management or investment decision logic. Its future methodological contribution would be a decision-support extension in which persistent unfavorable drift is mapped to tiered management and investment responses.
+This methodology transforms TripAdvisor reviews of Bvlgari Resort Bali into a structured research dataset and visualization workflow. It begins with data validation and text preprocessing, applies multiple lexicon-based sentiment and emotion measures, compares text sentiment with star and aspect ratings, visualizes sentiment patterns over time, and produces robust period-monitoring outputs. The approach builds on established review-based hospitality and sentiment-analysis methods while adapting them to a single luxury-resort case (Adnyana et al., 2026; Filieri et al., 2015; Liu, 2020). The current project does not yet implement management or investment decision logic. Its future methodological contribution would be a decision-support extension in which persistent unfavorable drift is mapped to tiered management and investment responses.
 
 The framework is academically rigorous because it specifies the corpus, preprocessing rules, analytical measures, validation logic, limitations, and ethical constraints. It is also a foundation for future managerial use because it produces the indicators that a later decision-support system would need. The central principle is caution with actionability: do not treat sentiment movement as meaningful until it is persistent, supported by enough review volume, triangulated with ratings or aspect scores, interpreted through the actual review text, and connected to operational or financial evidence.
 
@@ -603,7 +666,7 @@ The framework is academically rigorous because it specifies the corpus, preproce
 
 Adnyana, P. P., Wiweka, K., Lochan, A., & Trisdyani, N. L. P. (2026). Beyond taste: A sentiment analysis of informal language and cultural appreciation in Tripadvisor reviews of Balinese Ayam Betutu. *SOSIOHUMANIORA: Jurnal Ilmiah Ilmu Sosial dan Humaniora, 12*(1), 176-197. https://doi.org/10.30738/sosio.v12i1.21041
 
-Bichler, B. F., Pikkemaat, B., & Peters, M. (2021). Exploring the role of service quality, atmosphere and food for revisits in restaurants by using an e-mystery guest approach. *Journal of Hospitality and Tourism Insights, 4*(3), 351-369. https://doi.org/10.1108/JHTI-04-2020-0048
+Bichler, B. F., Pikkemaat, B., & Peters, M. (2021). Exploring the role of service quality, atmosphere and food for revisits in restaurants by using a e-mystery guest approach. *Journal of Hospitality and Tourism Insights, 4*(3), 351-369. https://doi.org/10.1108/JHTI-04-2020-0048
 
 Filieri, R., Alguezaui, S., & McLeay, F. (2015). Why do travelers trust TripAdvisor? Antecedents of trust towards consumer-generated media and its influence on recommendation adoption and word of mouth. *Tourism Management, 51*, 174-185. https://doi.org/10.1016/j.tourman.2015.05.007
 
@@ -611,10 +674,10 @@ Kandampully, J., & Suhartanto, D. (2000). Customer loyalty in the hotel industry
 
 Litvin, S. W. (2019). Hofstede, cultural differences, and TripAdvisor hotel reviews. *International Journal of Tourism Research, 21*(5), 712-717. https://doi.org/10.1002/jtr.2298
 
-Liu, B. (2022). *Sentiment analysis: Mining opinions, sentiments, and emotions*. Cambridge University Press.
+Liu, B. (2020). *Sentiment analysis: Mining opinions, sentiments, and emotions* (2nd ed.). Cambridge University Press. https://doi.org/10.1017/9781108639286
 
 Mohammad, S. M., & Turney, P. D. (2013). *NRC Emotion Lexicon*. National Research Council Canada. https://doi.org/10.4224/21270984
 
-Nielsen, F. A. (2011). A new ANEW: Evaluation of a word list for sentiment analysis in microblogs. *Proceedings of the ESWC2011 Workshop on Making Sense of Microposts*, 93-98.
+Nielsen, F. A. (2011). A new ANEW: Evaluation of a word list for sentiment analysis in microblogs. *Proceedings of the ESWC2011 Workshop on Making Sense of Microposts*, 93-98. https://doi.org/10.48550/arXiv.1103.2903
 
 Silge, J., & Robinson, D. (2016). tidytext: Text mining and analysis using tidy data principles in R. *Journal of Open Source Software, 1*(3), 37. https://doi.org/10.21105/joss.00037
