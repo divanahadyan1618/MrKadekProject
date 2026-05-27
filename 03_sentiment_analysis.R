@@ -21,6 +21,7 @@ library(tidytext)
 # It contains the massive dictionaries we need to score emotions.
 library(syuzhet)
 source("scripts/data_config.R")
+source("scripts/helpers.R")
 
 cat("Libraries loaded successfully!\n")
 
@@ -49,13 +50,19 @@ cat("Loaded", nrow(cleaned_reviews), "cleaned reviews for emotional scoring.\n")
 # We are asking the computer to read every review and calculate a math score.
 # We use two different methods to be thorough:
 # 1. "syuzhet" method: A standard scientific scoring system.
-# 2. "afinn" method: Gives an integer score from -5 (furious) to +5 (thrilled).
+# 2. "afinn" method: The word-level lexicon runs from -5 (furious) to
+#    +5 (thrilled). For a full review, the method adds those word scores
+#    together, so score_afinn is a summed review score and can be above +5
+#    or below -5.
+# The helper below flips sentiment words that appear right after negators such
+# as "not", "never", "without", or "cannot". This keeps phrases like "cannot
+# recommend" from being counted as positive just because "recommend" is positive.
 
 # 'mutate' means "create a new column in our table".
 sentiment_results <- cleaned_reviews %>%
   mutate(
-    score_syuzhet = get_sentiment(cleaned_text, method = "syuzhet"),
-    score_afinn = get_sentiment(cleaned_text, method = "afinn")
+    score_syuzhet = score_negation_aware_sentiment(cleaned_text, method = "syuzhet"),
+    score_afinn = score_negation_aware_sentiment(cleaned_text, method = "afinn")
   )
 
 # =====================================================================

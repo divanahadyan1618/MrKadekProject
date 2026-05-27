@@ -46,7 +46,7 @@ Load the prepared TripAdvisor review CSV for **Bvlgari Resort Bali**. The raw CS
 * Rating scores (1-5 stars)
 * Review dates
 * Stay dates and trip types
-* Reviewer metadata
+* Non-identifying reviewer context such as contribution counts and trip type
 
 ### Step 2: Data Cleaning & Preprocessing (`02_cleaning.ipynb`)
 Raw reviews are noisy. We clean the text by:
@@ -67,24 +67,24 @@ Convert numbers and scores into high-impact visuals:
 * **Aspect Rating Diagnostics**: Compare value, rooms, location, cleanliness, service, and sleep quality using average ratings, low-score shares, and yearly heatmaps.
 * **Emotion Breakdown**: Compare emotion categories such as joy, trust, anger, fear, and sadness.
 * **Sentiment Word Cloud**: Instantly spot the most repeated AFINN-scored sentiment words. Neutral topic words are intentionally excluded, so the cloud focuses on words such as "beautiful", "friendly", "excellent", or "bad".
-* **Monthly Sentiment Heatmap**: Read the calendar pattern quickly. Each tile is one month in one year, colored by average sentiment and labeled with the number of reviews.
-* **Monthly Rolling Trend**: Follow the sentiment trend over time. The blue line smooths monthly sentiment using a 6-month rolling average, and the dotted line compares each month to the average of all earlier reviews.
+* **Monthly Sentiment Heatmap**: Read the calendar pattern quickly. Each tile is one month in one year, colored by average AFINN sentiment per 100 cleaned words and labeled with the number of reviews.
+* **Monthly Rolling Trend**: Follow the sentiment trend over time. The blue line smooths length-normalized monthly sentiment using a 6-month rolling average, and the dotted line compares each month to the average of all earlier reviews.
 * **Quarterly Boxplot**: Summarize review sentiment spread for each quarter. This is less noisy than monthly boxplots because each quarter usually has more reviews.
 * **Yearly Boxplot with Statistics**: Summarize each year's sentiment distribution with `n`, average, median, quartiles, minimum, maximum, and outlier count printed below the chart.
 
 ### Step 5: Aspect-Text Diagnostics (`05_aspect_text_analysis.R`)
 Connect structured aspect ratings to the written reviews:
 * **Aspect-Conditioned Text Mining**: Compare words and phrases in low aspect reviews (`1-3`) against high aspect reviews (`4-5`).
-* **Aspect-Specific Sentiment**: Summarize text sentiment, negative-text share, and emotion counts by aspect.
+* **Aspect-Specific Sentiment**: Summarize length-normalized text sentiment, negative-text share, and emotion counts by aspect.
 * **Aspect-Text Mismatch Review Table**: Identify cases such as high overall ratings with low aspect ratings, or high aspect ratings with negative text.
 * **Key-Term Tables by Aspect**: Save low-score-associated words and phrases for value, rooms, location, cleanliness, service, and sleep quality.
 * **Aspect-Text Visualizations**: Generate boxplots, word and phrase charts, a negative-term heatmap, and mismatch count charts for qualitative interpretation.
 
 ---
 
-## ☁️ Run in Google Colab (No Installation Required!)
+## ☁️ Run in Google Colab (No Local Installation Required!)
 
-You can run this entire project in your browser using Google Colab in a single, unified workspace. The master notebook contains the full workflow from data import to visualization. Upload `data/raw/reviews.csv` before running the notebook outside this local project.
+You can run this entire project in your browser using Google Colab in a single, unified workspace. The master notebook contains the full workflow from data import through visualization and aspect-text diagnostics. Run the setup cell first; it installs the required R packages inside the temporary Colab session. Then upload `reviews.csv` into the Colab file browser, or place the same file at `data/raw/reviews.csv`, before running Step 1.
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/divanahadyan1618/MrKadekProject/blob/master/Colab_Master_TripAdvisor.ipynb) **Open the Master Research Notebook**
 
@@ -93,8 +93,11 @@ You can run this entire project in your browser using Google Colab in a single, 
 ## 🚀 How to Run Locally
 
 1. **Install R packages once**:
+   The dated CRAN snapshot keeps package versions stable when the project is rerun.
    ```r
-   install.packages(c("tidyverse", "tidytext", "syuzhet", "wordcloud", "RColorBrewer", "lubridate"))
+   cran_snapshot_url <- "https://packagemanager.posit.co/cran/2026-05-26"
+   install.packages(c("tidyverse", "tidytext", "syuzhet", "wordcloud", "RColorBrewer", "lubridate", "IRkernel"), repos = cran_snapshot_url)
+   IRkernel::installspec(user = TRUE)
    ```
 2. **Start Jupyter Notebook**:
    Open a terminal (e.g., PowerShell or Command Prompt) in this directory and run:
@@ -104,7 +107,7 @@ You can run this entire project in your browser using Google Colab in a single, 
 3. **Open in Browser**:
    Your browser will automatically open to the Jupyter dashboard.
 4. **Execute Steps Sequentially**:
-   Start with `01_data_import.ipynb` and proceed in order (01 -> 02 -> 03 -> 04 -> 05). Each notebook or script contains clear explanations and R code blocks that can be executed cell-by-cell.
+   Start with `01_data_import.ipynb` and proceed through `04_visualization.ipynb`. Step 5 is an R script, so run `Rscript 05_aspect_text_analysis.R` from the terminal after Steps 1-4, or run `Rscript Master_TripAdvisor.R` to execute the full workflow in order.
 
 ---
 

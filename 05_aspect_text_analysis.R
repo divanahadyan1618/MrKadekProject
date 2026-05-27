@@ -69,6 +69,49 @@ theme_premium <- function() {
     )
 }
 
+# RStudio has an interactive Plots pane, but Rscript runs without one.
+# This helper only prints charts when a person is using R interactively.
+# The charts are still saved as PNG files by ggsave() in every run.
+show_plot_for_interactive_use <- function(plot_object) {
+  if (interactive()) {
+    print(plot_object)
+  }
+}
+
+# Some sampled datasets are small enough that a table may be missing an
+# expected numeric column, such as count_low when no low-score reviews exist.
+# This helper adds the missing column filled with zeroes before later math runs.
+add_missing_numeric_column <- function(data, column_name) {
+  if (!column_name %in% names(data)) {
+    data[[column_name]] <- 0
+  }
+
+  data
+}
+
+# When a sample has too little data for a chart, we still save a PNG file. That
+# keeps the workflow predictable and tells beginners why the chart is empty.
+save_placeholder_plot <- function(file_name, title, message, width = 10, height = 6) {
+  placeholder_plot <- ggplot() +
+    annotate(
+      "text",
+      x = 0,
+      y = 0,
+      label = message,
+      size = 4,
+      color = "#2C3E50",
+      lineheight = 0.95
+    ) +
+    labs(title = title, x = NULL, y = NULL) +
+    theme_void() +
+    theme(
+      plot.title = element_text(face = "bold", size = 15, hjust = 0.5, color = "#1A252C")
+    )
+
+  ggsave(file.path(figures_dir, file_name), plot = placeholder_plot, width = width, height = height, dpi = 300)
+  show_plot_for_interactive_use(placeholder_plot)
+}
+
 # Correlation measures whether two numbers tend to move together.
 # This helper returns NA when there are too few complete rows or when all values
 # are the same, because correlation is not meaningful in those cases.
@@ -106,6 +149,28 @@ aspect_rating_columns <- c(
   "service_rating" = "Service",
   "sleep_quality_rating" = "Sleep quality"
 )
+
+# Empty result tables still need the same columns as normal result tables.
+# That way write_csv(), chart code, and tests can run even on tiny samples.
+empty_term_comparison <- function(term_type) {
+  tibble(
+    aspect_key = character(),
+    aspect_label = factor(character(), levels = unname(aspect_rating_columns)),
+    term = character(),
+    count_high = numeric(),
+    count_low = numeric(),
+    total_high = numeric(),
+    total_low = numeric(),
+    low_review_share = numeric(),
+    high_review_share = numeric(),
+    lift_low_vs_high = numeric(),
+    log_lift_low_vs_high = numeric(),
+    starts_with_negation = logical(),
+    afinn_term_score = numeric(),
+    term_sentiment = character(),
+    term_type = rep(as.character(term_type), 0)
+  )
+}
 
 # Some datasets may not include every optional aspect rating. This line keeps
 # only the aspect columns that are actually present in the current data.
@@ -149,9 +214,24 @@ aspect_reviews <- research_data %>%
     # a number.
     review_id = as.character(review_id),
     overall_rating = readr::parse_number(as.character(rating)),
-    score_afinn_number = readr::parse_number(as.character(score_afinn)),
-    score_syuzhet_number = readr::parse_number(as.character(score_syuzhet)),
+    # AFINN and Syuzhet are summed scores, so long reviews can look more
+    # emotional simply because they contain more words. We keep raw scores for
+    # traceability, then use per-100-word scores for aspect comparisons.
+    score_afinn_raw = readr::parse_number(as.character(score_afinn)),
+    score_syuzhet_raw = readr::parse_number(as.character(score_syuzhet)),
     review_word_count = str_count(coalesce(cleaned_text, ""), "\\S+"),
+    score_afinn_per_100_words = if_else(
+      review_word_count > 0,
+      score_afinn_raw / review_word_count * 100,
+      NA_real_
+    ),
+    score_syuzhet_per_100_words = if_else(
+      review_word_count > 0,
+      score_syuzhet_raw / review_word_count * 100,
+      NA_real_
+    ),
+    score_afinn_number = score_afinn_per_100_words,
+    score_syuzhet_number = score_syuzhet_per_100_words,
     across(all_of(available_aspect_columns), ~ readr::parse_number(as.character(.x)))
   ) %>%
   select(
@@ -162,7 +242,11 @@ aspect_reviews <- research_data %>%
     cleaned_text,
     rating,
     overall_rating,
+    score_afinn_raw,
+    score_afinn_per_100_words,
     score_afinn_number,
+    score_syuzhet_raw,
+    score_syuzhet_per_100_words,
     score_syuzhet_number,
     sentiment_category,
     review_word_count,
@@ -228,14 +312,16 @@ aspect_band_totals <- aspect_review_index %>%
     values_from = reviews_in_band,
     values_fill = 0,
     names_prefix = "total_"
-  )
+  ) %>%
+  add_missing_numeric_column("total_low") %>%
+  add_missing_numeric_column("total_high")
 
 # =====================================================================
 # STEP 4: Aspect-Specific Sentiment Alignment
 # =====================================================================
 # This summary asks: when an aspect rating is lower, does the full review text
 # also look less positive? It combines structured aspect ratings, overall star
-# ratings, AFINN/Syuzhet sentiment, and NRC emotion counts.
+# ratings, length-normalized AFINN/Syuzhet sentiment, and NRC emotion counts.
 aspect_text_alignment <- aspect_reviews %>%
   filter(!is.na(aspect_rating)) %>%
   group_by(aspect_key, aspect_label) %>%
@@ -341,10 +427,14 @@ token_review_data <- cleaned_tokens %>%
   distinct(review_id, term)
 
 data("stop_words", package = "tidytext")
+negation_words <- c("no", "not", "never", "without", "cannot")
+phrase_stop_words <- setdiff(stop_words$word, negation_words)
 
 # Phrases can explain problems better than isolated words. This creates
 # two-word phrases such as "airport transfer" or "poorly maintained", then
-# removes phrases made from stopwords or generic hotel words.
+# removes phrases made from stopwords or generic hotel words. Negation words
+# are allowed because phrases such as "not worth" and "no apology" are useful
+# complaint evidence.
 phrase_review_data <- research_data %>%
   transmute(
     review_id = as.character(review_id),
@@ -358,10 +448,12 @@ phrase_review_data <- research_data %>%
     !is.na(word_two),
     str_detect(word_one, "^[a-z]+$"),
     str_detect(word_two, "^[a-z]+$"),
-    nchar(word_one) >= 3,
+    # Keep short negation words such as "no" because phrases like "no apology"
+    # are meaningful complaints even though the first word has only two letters.
+    nchar(word_one) >= 3 | word_one %in% negation_words,
     nchar(word_two) >= 3,
-    !word_one %in% stop_words$word,
-    !word_two %in% stop_words$word,
+    !word_one %in% phrase_stop_words,
+    !word_two %in% phrase_stop_words,
     !word_one %in% domain_neutral_words,
     !word_two %in% domain_neutral_words
   ) %>%
@@ -376,10 +468,19 @@ phrase_review_data <- research_data %>%
 # - If a word appears equally often in low and high reviews, it is less useful
 #   for diagnosis.
 build_term_comparison <- function(term_review_data, term_type) {
-  aspect_review_index %>%
+  joined_terms <- aspect_review_index %>%
     # Many-to-many is expected here because one review can have many aspect
     # rows and many words or phrases.
-    inner_join(term_review_data, by = "review_id", relationship = "many-to-many") %>%
+    inner_join(term_review_data, by = "review_id", relationship = "many-to-many")
+
+  # A very small sample may have no matching words, no phrases, or only one
+  # rating band. Returning an empty table is more useful than stopping the
+  # entire project with a missing-column error.
+  if (nrow(joined_terms) == 0) {
+    return(empty_term_comparison(term_type))
+  }
+
+  joined_terms %>%
     distinct(aspect_key, aspect_label, band_key, review_id, term) %>%
     count(aspect_key, aspect_label, band_key, term, name = "review_count") %>%
     pivot_wider(
@@ -388,7 +489,11 @@ build_term_comparison <- function(term_review_data, term_type) {
       values_fill = 0,
       names_prefix = "count_"
     ) %>%
+    add_missing_numeric_column("count_low") %>%
+    add_missing_numeric_column("count_high") %>%
     left_join(aspect_band_totals, by = c("aspect_key", "aspect_label")) %>%
+    add_missing_numeric_column("total_low") %>%
+    add_missing_numeric_column("total_high") %>%
     mutate(
       count_low = coalesce(count_low, 0L),
       count_high = coalesce(count_high, 0L),
@@ -402,11 +507,19 @@ build_term_comparison <- function(term_review_data, term_type) {
       lift_low_vs_high = low_review_share / high_review_share,
       # The log version makes very large ratios easier to chart and compare.
       log_lift_low_vs_high = log(lift_low_vs_high),
-      # Use AFINN to color words as positive, negative, or neutral. Neutral
-      # terms can still matter because topic words such as "airport" or "cost"
-      # may explain the operational issue even if they are not emotional words.
+      # Use AFINN to color words as positive, negative, or neutral. For phrases
+      # that start with a negation word, mark the phrase as negative so "not
+      # worth" is not colored as positive just because "worth" is positive.
+      starts_with_negation = term_type == "phrase" &
+        str_detect(term, paste0("^(", paste(negation_words, collapse = "|"), ")\\s+")),
       afinn_term_score = syuzhet::get_sentiment(term, method = "afinn"),
+      afinn_term_score = if_else(
+        starts_with_negation & afinn_term_score > 0,
+        -afinn_term_score,
+        afinn_term_score
+      ),
       term_sentiment = case_when(
+        starts_with_negation ~ "negative",
         afinn_term_score > 0 ~ "positive",
         afinn_term_score < 0 ~ "negative",
         TRUE ~ "neutral"
@@ -464,16 +577,27 @@ aspect_text_mismatches <- aspect_reviews %>%
     low_overall_high_aspect = !is.na(overall_rating) & overall_rating <= 3 & aspect_rating >= 4
   ) %>%
   filter(high_overall_low_aspect | low_aspect_positive_text | high_aspect_negative_text | low_overall_high_aspect) %>%
-  rowwise() %>%
   mutate(
-    mismatch_types = paste(
-      c(
-        if (high_overall_low_aspect) "high overall rating with low aspect rating",
-        if (low_aspect_positive_text) "low aspect rating with positive text sentiment",
-        if (high_aspect_negative_text) "high aspect rating with negative text sentiment",
-        if (low_overall_high_aspect) "low overall rating with high aspect rating"
+    # pmap_chr() builds the label one review at a time, and it also works when
+    # the table has zero rows. That keeps tiny samples from crashing here.
+    mismatch_types = pmap_chr(
+      list(
+        high_overall_low_aspect,
+        low_aspect_positive_text,
+        high_aspect_negative_text,
+        low_overall_high_aspect
       ),
-      collapse = "; "
+      function(high_overall_low_aspect, low_aspect_positive_text, high_aspect_negative_text, low_overall_high_aspect) {
+        paste(
+          c(
+            if (isTRUE(high_overall_low_aspect)) "high overall rating with low aspect rating",
+            if (isTRUE(low_aspect_positive_text)) "low aspect rating with positive text sentiment",
+            if (isTRUE(high_aspect_negative_text)) "high aspect rating with negative text sentiment",
+            if (isTRUE(low_overall_high_aspect)) "low overall rating with high aspect rating"
+          ),
+          collapse = "; "
+        )
+      }
     )
   ) %>%
   ungroup() %>%
@@ -483,15 +607,17 @@ aspect_text_mismatches <- aspect_reviews %>%
     aspect = as.character(aspect_label),
     aspect_rating,
     overall_rating,
-    score_afinn = score_afinn_number,
-    score_syuzhet = score_syuzhet_number,
+    score_afinn_per_100_words = score_afinn_number,
+    score_afinn_raw,
+    score_syuzhet_per_100_words = score_syuzhet_number,
+    score_syuzhet_raw,
     sentiment_category,
     mismatch_types,
     title,
     review_excerpt = make_review_excerpt(review_text),
     review_text
   ) %>%
-  arrange(aspect, aspect_rating, score_afinn, review_id)
+  arrange(aspect, aspect_rating, score_afinn_per_100_words, review_id)
 
 write_csv(
   aspect_text_mismatches,
@@ -515,8 +641,10 @@ aspect_qualitative_examples <- aspect_reviews %>%
     review_date,
     aspect_rating,
     overall_rating,
-    score_afinn = score_afinn_number,
-    score_syuzhet = score_syuzhet_number,
+    score_afinn_per_100_words = score_afinn_number,
+    score_afinn_raw,
+    score_syuzhet_per_100_words = score_syuzhet_number,
+    score_syuzhet_raw,
     sentiment_category,
     title,
     review_excerpt,
@@ -531,33 +659,47 @@ write_csv(
 # =====================================================================
 # STEP 7: Visualize Aspect Text Results
 # =====================================================================
-# This chart checks whether text sentiment generally improves as the structured
-# aspect rating increases. Each panel is one aspect.
-p_aspect_sentiment <- aspect_reviews %>%
+# This chart checks whether length-normalized text sentiment generally improves
+# as the structured aspect rating increases. Each panel is one aspect.
+aspect_sentiment_plot_data <- aspect_reviews %>%
   filter(!is.na(aspect_rating), !is.na(score_afinn_number)) %>%
-  mutate(aspect_rating_group = factor(aspect_rating, levels = 1:5)) %>%
-  ggplot(aes(x = aspect_rating_group, y = score_afinn_number, fill = aspect_rating_group)) +
-  geom_hline(yintercept = 0, color = "#7F8C8D", linewidth = 0.4, linetype = "dashed") +
-  geom_boxplot(alpha = 0.82, outlier.alpha = 0.25, width = 0.62) +
-  facet_wrap(~ aspect_label, ncol = 3) +
-  scale_fill_brewer(palette = "RdYlGn") +
-  labs(
-    title = "Text Sentiment by Structured Aspect Rating",
-    subtitle = "Boxes compare whole-review AFINN sentiment for low and high aspect scores",
-    x = "Aspect rating",
-    y = "AFINN sentiment score"
-  ) +
-  theme_premium() +
-  theme(legend.position = "none")
+  mutate(aspect_rating_group = factor(aspect_rating, levels = 1:5))
 
-print(p_aspect_sentiment)
-ggsave(
-  file.path(figures_dir, "aspect_sentiment_by_rating_boxplot.png"),
-  plot = p_aspect_sentiment,
-  width = 11,
-  height = 7,
-  dpi = 300
-)
+if (nrow(aspect_sentiment_plot_data) > 0) {
+  p_aspect_sentiment <- ggplot(
+    aspect_sentiment_plot_data,
+    aes(x = aspect_rating_group, y = score_afinn_number, fill = aspect_rating_group)
+  ) +
+    geom_hline(yintercept = 0, color = "#7F8C8D", linewidth = 0.4, linetype = "dashed") +
+    geom_boxplot(alpha = 0.82, outlier.alpha = 0.25, width = 0.62) +
+    facet_wrap(~ aspect_label, ncol = 3) +
+    scale_fill_brewer(palette = "RdYlGn") +
+    labs(
+      title = "Text Sentiment by Structured Aspect Rating",
+      subtitle = "Boxes compare whole-review AFINN per 100 cleaned words for low and high aspect scores",
+      x = "Aspect rating",
+      y = "AFINN per 100 cleaned words"
+    ) +
+    theme_premium() +
+    theme(legend.position = "none")
+
+  show_plot_for_interactive_use(p_aspect_sentiment)
+  ggsave(
+    file.path(figures_dir, "aspect_sentiment_by_rating_boxplot.png"),
+    plot = p_aspect_sentiment,
+    width = 11,
+    height = 7,
+    dpi = 300
+  )
+} else {
+  save_placeholder_plot(
+    "aspect_sentiment_by_rating_boxplot.png",
+    "Text Sentiment by Structured Aspect Rating",
+    "There are no complete aspect rating and text sentiment pairs in this sample.",
+    width = 11,
+    height = 7
+  )
+}
 
 # Pick the strongest low-score-associated words for each aspect so the chart is
 # readable. The full ranked table is still saved in the CSV report.
@@ -572,36 +714,46 @@ plot_key_terms <- aspect_text_key_terms %>%
 
 # This chart shows the words that most separate low-score reviews from
 # high-score reviews for each aspect.
-p_low_terms <- ggplot(
-  plot_key_terms,
-  aes(x = term_for_plot, y = log_lift_low_vs_high, fill = term_sentiment)
-) +
-  geom_col(width = 0.72, alpha = 0.88) +
-  geom_text(aes(label = label_text), hjust = -0.08, size = 2.5, color = "#2C3E50") +
-  coord_flip() +
-  facet_wrap(~ aspect_label, scales = "free_y", ncol = 2) +
-  tidytext::scale_x_reordered() +
-  scale_fill_manual(
-    values = c("negative" = "#E76F51", "neutral" = "#457B9D", "positive" = "#2A9D8F"),
-    name = "AFINN word tone"
+if (nrow(plot_key_terms) > 0) {
+  p_low_terms <- ggplot(
+    plot_key_terms,
+    aes(x = term_for_plot, y = log_lift_low_vs_high, fill = term_sentiment)
   ) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.28))) +
-  labs(
-    title = "Words Most Associated with Low Aspect Scores",
-    subtitle = "Bars show smoothed log lift in low-score reviews compared with high-score reviews",
-    x = "Word",
-    y = "Low-score association"
-  ) +
-  theme_premium()
+    geom_col(width = 0.72, alpha = 0.88) +
+    geom_text(aes(label = label_text), hjust = -0.08, size = 2.5, color = "#2C3E50") +
+    coord_flip() +
+    facet_wrap(~ aspect_label, scales = "free_y", ncol = 2) +
+    tidytext::scale_x_reordered() +
+    scale_fill_manual(
+      values = c("negative" = "#E76F51", "neutral" = "#457B9D", "positive" = "#2A9D8F"),
+      name = "AFINN word tone"
+    ) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.28))) +
+    labs(
+      title = "Words Most Associated with Low Aspect Scores",
+      subtitle = "Bars show smoothed log lift in low-score reviews compared with high-score reviews",
+      x = "Word",
+      y = "Low-score association"
+    ) +
+    theme_premium()
 
-print(p_low_terms)
-ggsave(
-  file.path(figures_dir, "aspect_low_score_key_terms.png"),
-  plot = p_low_terms,
-  width = 11,
-  height = 8,
-  dpi = 300
-)
+  show_plot_for_interactive_use(p_low_terms)
+  ggsave(
+    file.path(figures_dir, "aspect_low_score_key_terms.png"),
+    plot = p_low_terms,
+    width = 11,
+    height = 8,
+    dpi = 300
+  )
+} else {
+  save_placeholder_plot(
+    "aspect_low_score_key_terms.png",
+    "Words Most Associated with Low Aspect Scores",
+    "This sample does not have enough low-score review text to rank words.",
+    width = 11,
+    height = 8
+  )
+}
 
 # Repeat the same idea for two-word phrases. Phrases are often easier for
 # non-technical readers to interpret than individual words.
@@ -614,36 +766,46 @@ plot_key_phrases <- aspect_text_key_phrases %>%
     label_text = paste0("low n=", count_low)
   )
 
-p_low_phrases <- ggplot(
-  plot_key_phrases,
-  aes(x = term_for_plot, y = log_lift_low_vs_high, fill = term_sentiment)
-) +
-  geom_col(width = 0.72, alpha = 0.88) +
-  geom_text(aes(label = label_text), hjust = -0.08, size = 2.4, color = "#2C3E50") +
-  coord_flip() +
-  facet_wrap(~ aspect_label, scales = "free_y", ncol = 2) +
-  tidytext::scale_x_reordered() +
-  scale_fill_manual(
-    values = c("negative" = "#E76F51", "neutral" = "#457B9D", "positive" = "#2A9D8F"),
-    name = "AFINN phrase tone"
+if (nrow(plot_key_phrases) > 0) {
+  p_low_phrases <- ggplot(
+    plot_key_phrases,
+    aes(x = term_for_plot, y = log_lift_low_vs_high, fill = term_sentiment)
   ) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.34))) +
-  labs(
-    title = "Phrases Most Associated with Low Aspect Scores",
-    subtitle = "Bars show smoothed log lift in low-score reviews compared with high-score reviews",
-    x = "Phrase",
-    y = "Low-score association"
-  ) +
-  theme_premium()
+    geom_col(width = 0.72, alpha = 0.88) +
+    geom_text(aes(label = label_text), hjust = -0.08, size = 2.4, color = "#2C3E50") +
+    coord_flip() +
+    facet_wrap(~ aspect_label, scales = "free_y", ncol = 2) +
+    tidytext::scale_x_reordered() +
+    scale_fill_manual(
+      values = c("negative" = "#E76F51", "neutral" = "#457B9D", "positive" = "#2A9D8F"),
+      name = "AFINN phrase tone"
+    ) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.34))) +
+    labs(
+      title = "Phrases Most Associated with Low Aspect Scores",
+      subtitle = "Bars show smoothed log lift in low-score reviews compared with high-score reviews",
+      x = "Phrase",
+      y = "Low-score association"
+    ) +
+    theme_premium()
 
-print(p_low_phrases)
-ggsave(
-  file.path(figures_dir, "aspect_low_score_key_phrases.png"),
-  plot = p_low_phrases,
-  width = 11,
-  height = 8,
-  dpi = 300
-)
+  show_plot_for_interactive_use(p_low_phrases)
+  ggsave(
+    file.path(figures_dir, "aspect_low_score_key_phrases.png"),
+    plot = p_low_phrases,
+    width = 11,
+    height = 8,
+    dpi = 300
+  )
+} else {
+  save_placeholder_plot(
+    "aspect_low_score_key_phrases.png",
+    "Phrases Most Associated with Low Aspect Scores",
+    "This sample does not have enough low-score review text to rank phrases.",
+    width = 11,
+    height = 8
+  )
+}
 
 # This chart keeps only negative AFINN words. It helps identify where low
 # aspect scores are connected to explicitly negative language.
@@ -679,7 +841,7 @@ if (nrow(negative_heatmap_terms) > 0) {
       axis.text.x = element_text(angle = 35, hjust = 1)
     )
 
-  print(p_negative_heatmap)
+  show_plot_for_interactive_use(p_negative_heatmap)
   ggsave(
     file.path(figures_dir, "aspect_negative_term_heatmap.png"),
     plot = p_negative_heatmap,
@@ -688,7 +850,13 @@ if (nrow(negative_heatmap_terms) > 0) {
     dpi = 300
   )
 } else {
-  warning("No negative terms had positive low-score lift; skipping negative term heatmap.")
+  save_placeholder_plot(
+    "aspect_negative_term_heatmap.png",
+    "Negative Words Associated with Low Aspect Scores",
+    "No negative terms had positive low-score lift in this sample.",
+    width = 10,
+    height = 7
+  )
 }
 
 # Count each mismatch type by aspect so reviewers can see where manual reading
@@ -697,51 +865,61 @@ mismatch_counts <- aspect_text_mismatches %>%
   separate_rows(mismatch_types, sep = "; ") %>%
   count(aspect, mismatch_types, name = "review_count")
 
-# Sort aspects by their total number of mismatch cases so the chart has a
-# stable and meaningful order.
-mismatch_aspect_order <- mismatch_counts %>%
-  group_by(aspect) %>%
-  summarise(total_cases = sum(review_count), .groups = "drop") %>%
-  arrange(total_cases) %>%
-  pull(aspect)
+if (nrow(mismatch_counts) > 0) {
+  # Sort aspects by their total number of mismatch cases so the chart has a
+  # stable and meaningful order.
+  mismatch_aspect_order <- mismatch_counts %>%
+    group_by(aspect) %>%
+    summarise(total_cases = sum(review_count), .groups = "drop") %>%
+    arrange(total_cases) %>%
+    pull(aspect)
 
-mismatch_counts <- mismatch_counts %>%
-  mutate(
-    aspect = factor(aspect, levels = mismatch_aspect_order),
-    mismatch_type_label = str_wrap(mismatch_types, width = 34)
-  )
+  mismatch_counts <- mismatch_counts %>%
+    mutate(
+      aspect = factor(aspect, levels = mismatch_aspect_order),
+      mismatch_type_label = str_wrap(mismatch_types, width = 34)
+    )
 
-p_mismatches <- ggplot(
-  mismatch_counts,
-  aes(x = aspect, y = review_count, fill = mismatch_type_label)
-) +
-  geom_col(width = 0.72, alpha = 0.88) +
-  coord_flip() +
-  scale_fill_brewer(
-    palette = "Set2",
-    name = "Mismatch type",
-    guide = guide_legend(nrow = 2, byrow = TRUE)
+  p_mismatches <- ggplot(
+    mismatch_counts,
+    aes(x = aspect, y = review_count, fill = mismatch_type_label)
   ) +
-  labs(
-    title = "Aspect-Text Mismatch Cases for Qualitative Review",
-    subtitle = "Counts identify reviews where ratings and text signals do not fully agree",
-    x = "Aspect",
-    y = "Review-aspect cases"
-  ) +
-  theme_premium() +
-  theme(
-    legend.text = element_text(size = 8),
-    plot.margin = margin(10, 18, 10, 18)
-  )
+    geom_col(width = 0.72, alpha = 0.88) +
+    coord_flip() +
+    scale_fill_brewer(
+      palette = "Set2",
+      name = "Mismatch type",
+      guide = guide_legend(nrow = 2, byrow = TRUE)
+    ) +
+    labs(
+      title = "Aspect-Text Mismatch Cases for Qualitative Review",
+      subtitle = "Counts identify reviews where ratings and text signals do not fully agree",
+      x = "Aspect",
+      y = "Review-aspect cases"
+    ) +
+    theme_premium() +
+    theme(
+      legend.text = element_text(size = 8),
+      plot.margin = margin(10, 18, 10, 18)
+    )
 
-print(p_mismatches)
-ggsave(
-  file.path(figures_dir, "aspect_text_mismatch_counts.png"),
-  plot = p_mismatches,
-  width = 11,
-  height = 7,
-  dpi = 300
-)
+  show_plot_for_interactive_use(p_mismatches)
+  ggsave(
+    file.path(figures_dir, "aspect_text_mismatch_counts.png"),
+    plot = p_mismatches,
+    width = 11,
+    height = 7,
+    dpi = 300
+  )
+} else {
+  save_placeholder_plot(
+    "aspect_text_mismatch_counts.png",
+    "Aspect-Text Mismatch Cases for Qualitative Review",
+    "This sample did not produce any aspect-text mismatch cases.",
+    width = 11,
+    height = 7
+  )
+}
 
 cat("Aspect text analysis complete!\n")
 cat("- ", file.path(reports_dir, "aspect_text_alignment.csv"), "\n", sep = "")

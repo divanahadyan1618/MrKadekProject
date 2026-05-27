@@ -5,6 +5,10 @@
 
 prepared_source_name <- "Prepared TripAdvisor review CSV"
 
+# This project is intentionally a single-property analysis. Step 1 uses this
+# name to stop early if someone accidentally supplies a mixed-hotel CSV.
+target_hotel_name <- "Bvlgari Resort Bali"
+
 # Input data from the prepared TripAdvisor export.
 raw_reviews_path <- file.path("data", "raw", "reviews.csv")
 

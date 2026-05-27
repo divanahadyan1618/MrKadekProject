@@ -1,7 +1,7 @@
 aspect_key,aspect_label,reviews_with_aspect_rating,mean_aspect_rating,median_aspect_rating,low_score_count,low_score_share,mean_overall_rating,mean_afinn_sentiment,median_afinn_sentiment,mean_syuzhet_sentiment,negative_text_count,negative_text_share,mean_anger,mean_negative_nrc,corr_aspect_to_afinn,corr_aspect_to_overall_rating
-value_rating,Value,339,4.056,4,85,0.251,4.484,18.422,16,7.751,10,0.029,1.065,3.286,0.291,0.792
-rooms_rating,Rooms,322,4.522,5,40,0.124,4.438,18.59,16,7.948,10,0.031,1.099,3.425,0.324,0.741
-sleep_quality_rating,Sleep quality,272,4.551,5,29,0.107,4.485,18.739,16,7.795,10,0.037,1.114,3.346,0.298,0.793
-location_rating,Location,337,4.564,5,38,0.113,4.463,18.665,16,7.911,10,0.03,1.071,3.258,0.235,0.51
-cleanliness_rating,Cleanliness,327,4.572,5,35,0.107,4.471,18.401,16,7.84,9,0.028,1.135,3.431,0.224,0.757
-service_rating,Service,440,4.67,5,34,0.077,4.525,18.734,16,7.943,13,0.03,1.016,3.191,0.26,0.753
+value_rating,Value,339,4.056,4,85,0.251,4.484,15.639,13.369,5.874,13,0.038,1.065,3.292,0.456,0.792
+rooms_rating,Rooms,322,4.522,5,40,0.124,4.438,14.928,12.861,5.694,13,0.04,1.099,3.432,0.429,0.741
+sleep_quality_rating,Sleep quality,272,4.551,5,29,0.107,4.485,15.828,14.15,5.844,13,0.048,1.11,3.349,0.389,0.793
+location_rating,Location,337,4.564,5,38,0.113,4.463,15.317,13.873,5.814,14,0.042,1.071,3.264,0.297,0.51
+cleanliness_rating,Cleanliness,327,4.572,5,35,0.107,4.471,15.156,13.253,5.742,13,0.04,1.138,3.44,0.388,0.757
+service_rating,Service,440,4.67,5,34,0.077,4.525,15.371,13.506,5.879,17,0.039,1.014,3.193,0.344,0.753

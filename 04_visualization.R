@@ -58,22 +58,64 @@ theme_premium <- function() {
   )
 }
 
+# RStudio has an interactive Plots pane, but Rscript runs without one.
+# This helper only prints charts when a person is using R interactively.
+# The charts are still saved as PNG files by ggsave() in every run.
+show_plot_for_interactive_use <- function(plot_object) {
+  if (interactive()) {
+    print(plot_object)
+  }
+}
+
+# When a dataset is too small for a specific chart, we still save a PNG file.
+# This keeps the output folder honest: readers see why a chart is empty instead
+# of accidentally reading an older chart from a previous run.
+save_placeholder_plot <- function(file_name, title, message, width = 10, height = 6) {
+  placeholder_plot <- ggplot() +
+    annotate(
+      "text",
+      x = 0,
+      y = 0,
+      label = message,
+      size = 4,
+      color = "#2C3E50",
+      lineheight = 0.95
+    ) +
+    labs(title = title, x = NULL, y = NULL) +
+    theme_void() +
+    theme(
+      plot.title = element_text(face = "bold", size = 15, hjust = 0.5, color = "#1A252C")
+    )
+
+  ggsave(file.path(figures_dir, file_name), plot = placeholder_plot, width = width, height = height, dpi = 300)
+  show_plot_for_interactive_use(placeholder_plot)
+}
+
 parse_review_dates <- function(date_values) {
   # Dates can be written in different formats.
-  # This helper tries several common date formats until one works.
-  # suppressWarnings() keeps R from printing scary warning messages every time
-  # one date format does not match.
-  date_text <- as.character(date_values)
-  parsed <- as.Date(suppressWarnings(lubridate::ymd(date_text)))
+  # This helper only accepts dates that include a year. A label such as "May 18"
+  # is ambiguous because 18 could be a day, but lubridate::my() can treat it as
+  # the year 2018. We return NA for that case so the workflow can stop with a
+  # clear message instead of drawing the review in the wrong year.
+  date_text <- str_squish(as.character(date_values))
+  date_text[date_text %in% c("", "NA", "N/A", "NULL")] <- NA_character_
+  parsed <- as.Date(rep(NA_character_, length(date_text)))
 
-  missing_dates <- is.na(parsed)
-  parsed[missing_dates] <- as.Date(suppressWarnings(lubridate::mdy(date_text[missing_dates])))
+  parse_matching_dates <- function(pattern, parser) {
+    matching_dates <- is.na(parsed) &
+      !is.na(date_text) &
+      str_detect(date_text, regex(pattern, ignore_case = TRUE))
 
-  missing_dates <- is.na(parsed)
-  parsed[missing_dates] <- as.Date(suppressWarnings(lubridate::dmy(date_text[missing_dates])))
+    if (any(matching_dates)) {
+      parsed[matching_dates] <<- as.Date(suppressWarnings(parser(date_text[matching_dates])))
+    }
+  }
 
-  missing_dates <- is.na(parsed)
-  parsed[missing_dates] <- as.Date(suppressWarnings(lubridate::my(date_text[missing_dates])))
+  parse_matching_dates("^\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}$", lubridate::ymd)
+  parse_matching_dates("^\\d{4}[-/]\\d{1,2}$", lubridate::ym)
+  parse_matching_dates("^[A-Za-z]{3,9}\\s+\\d{1,2},\\s*\\d{4}$", lubridate::mdy)
+  parse_matching_dates("^\\d{1,2}\\s+[A-Za-z]{3,9}\\s+\\d{4}$", lubridate::dmy)
+  parse_matching_dates("^[A-Za-z]{3,9}\\s+\\d{4}$", lubridate::my)
 
   parsed
 }
@@ -91,6 +133,45 @@ safe_correlation <- function(x_values, y_values) {
   }
 
   cor(x_complete, y_complete)
+}
+
+remove_existing_files <- function(paths) {
+  existing_paths <- paths[file.exists(paths)]
+  if (length(existing_paths) > 0) {
+    invisible(file.remove(existing_paths))
+  }
+}
+
+aspect_report_paths <- file.path(
+  reports_dir,
+  c(
+    "aspect_rating_summary.csv",
+    "high_overall_low_aspect_reviews.csv",
+    "aspect_text_alignment.csv",
+    "aspect_text_band_summary.csv",
+    "aspect_text_key_terms.csv",
+    "aspect_text_key_phrases.csv",
+    "aspect_text_mismatches.csv",
+    "aspect_qualitative_examples.csv"
+  )
+)
+
+aspect_figure_paths <- file.path(
+  figures_dir,
+  c(
+    "aspect_mean_ratings.png",
+    "aspect_low_score_share.png",
+    "aspect_yearly_rating_heatmap.png",
+    "aspect_sentiment_by_rating_boxplot.png",
+    "aspect_low_score_key_terms.png",
+    "aspect_low_score_key_phrases.png",
+    "aspect_negative_term_heatmap.png",
+    "aspect_text_mismatch_counts.png"
+  )
+)
+
+clear_aspect_outputs <- function() {
+  remove_existing_files(c(aspect_report_paths, aspect_figure_paths))
 }
 
 # =====================================================================
@@ -121,8 +202,8 @@ p1 <- ggplot(sentiment_counts, aes(x = sentiment_category, y = review_count, fil
   ) +
   theme_premium() # Apply our custom paintbrush from Step 2!
 
-# Print the chart so it shows up in RStudio!
-print(p1)
+# Show the chart in RStudio, but do not open a PDF device during Rscript runs.
+show_plot_for_interactive_use(p1)
 
 # 'ggsave' saves the picture to our computer folder as a PNG image file.
 ggsave(file.path(figures_dir, "sentiment_distribution.png"), plot = p1, width = 7, height = 5, dpi = 300)
@@ -232,7 +313,7 @@ p1b <- ggplot(rating_sentiment, aes(x = rating_number, y = score_afinn, group = 
   ) +
   theme_premium()
 
-print(p1b)
+show_plot_for_interactive_use(p1b)
 
 ggsave(file.path(figures_dir, "sentiment_by_rating_boxplot.png"), plot = p1b, width = 9.5, height = 5.8, dpi = 300)
 
@@ -256,6 +337,7 @@ aspect_rating_columns <- c(
 # This line checks which of the expected aspect columns are actually available
 # before the script tries to use them.
 available_aspect_columns <- names(aspect_rating_columns)[names(aspect_rating_columns) %in% names(research_data)]
+has_usable_aspect_ratings <- FALSE
 
 if (length(available_aspect_columns) > 0) {
   # Make sure the rating columns are numbers. parse_number() is forgiving: it
@@ -263,38 +345,61 @@ if (length(available_aspect_columns) > 0) {
   aspect_data <- research_data %>%
     mutate(
       overall_rating = readr::parse_number(as.character(rating)),
-      score_afinn_number = readr::parse_number(as.character(score_afinn)),
+      # Raw AFINN is a summed score. Longer reviews can therefore produce larger
+      # scores even when the emotional density is similar. The aspect summaries
+      # use AFINN per 100 cleaned words so low/high aspect comparisons are fairer.
+      score_afinn_raw = readr::parse_number(as.character(score_afinn)),
+      review_word_count = str_count(coalesce(cleaned_text, ""), "\\S+"),
+      score_afinn_per_100_words = if_else(
+        review_word_count > 0,
+        score_afinn_raw / review_word_count * 100,
+        NA_real_
+      ),
+      score_afinn_number = score_afinn_per_100_words,
       date_parsed = parse_review_dates(review_date),
       year_label = as.character(lubridate::year(date_parsed)),
       across(all_of(available_aspect_columns), ~ readr::parse_number(as.character(.x)))
     )
 
-  # pivot_longer changes the table shape from "wide" to "long":
-  # - Wide format has one row per review and many aspect-rating columns.
-  # - Long format has one row per review-aspect pair.
-  # Long format makes summaries and charts much easier to build.
-  aspect_long <- aspect_data %>%
-    select(
-      review_id,
-      review_date,
-      year_label,
-      title,
-      review_text,
-      overall_rating,
-      score_afinn_number,
-      all_of(available_aspect_columns)
-    ) %>%
-    pivot_longer(
-      cols = all_of(available_aspect_columns),
-      names_to = "aspect_key",
-      values_to = "aspect_rating"
-    ) %>%
-    mutate(
-      aspect_label = factor(
-        aspect_rating_columns[aspect_key],
-        levels = unname(aspect_rating_columns)
+  usable_aspect_columns <- available_aspect_columns[
+    vapply(aspect_data[available_aspect_columns], function(column) any(!is.na(column)), logical(1))
+  ]
+
+  if (length(usable_aspect_columns) == 0) {
+    clear_aspect_outputs()
+    message("No usable structured aspect ratings were found, so Step 4 is skipping aspect reports and charts.")
+  } else {
+    has_usable_aspect_ratings <- TRUE
+    available_aspect_columns <- usable_aspect_columns
+
+    # pivot_longer changes the table shape from "wide" to "long":
+    # - Wide format has one row per review and many aspect-rating columns.
+    # - Long format has one row per review-aspect pair.
+    # Long format makes summaries and charts much easier to build.
+    aspect_long <- aspect_data %>%
+      select(
+        review_id,
+        review_date,
+        year_label,
+        title,
+        review_text,
+        overall_rating,
+        score_afinn_raw,
+        score_afinn_per_100_words,
+        score_afinn_number,
+        all_of(available_aspect_columns)
+      ) %>%
+      pivot_longer(
+        cols = all_of(available_aspect_columns),
+        names_to = "aspect_key",
+        values_to = "aspect_rating"
+      ) %>%
+      mutate(
+        aspect_label = factor(
+          aspect_rating_columns[aspect_key],
+          levels = unname(aspect_rating_columns)
+        )
       )
-    )
 
   # This table gives one summary row for each aspect. It includes:
   # - coverage: how many reviews supplied that optional rating
@@ -322,12 +427,17 @@ if (length(available_aspect_columns) > 0) {
   # or reuse in the methodology paper.
   write_csv(
     aspect_summary %>%
-      mutate(
+      transmute(
+        aspect_key,
+        aspect_label,
+        reviews_with_rating,
         coverage_pct = round(coverage_pct * 100, 1),
         mean_rating = round(mean_rating, 2),
         median_rating = round(median_rating, 2),
-        low_score_share = round(low_score_share * 100, 1),
-        very_low_score_share = round(very_low_score_share * 100, 1),
+        low_score_count,
+        low_score_pct = round(low_score_share * 100, 1),
+        very_low_score_count,
+        very_low_score_pct = round(very_low_score_share * 100, 1),
         corr_overall_rating = round(corr_overall_rating, 2),
         corr_afinn = round(corr_afinn, 2)
       ),
@@ -349,7 +459,8 @@ if (length(available_aspect_columns) > 0) {
       review_date = first(review_date),
       rating = first(overall_rating),
       low_aspects = paste(paste0(aspect_label, "=", aspect_rating), collapse = "; "),
-      score_afinn = first(score_afinn_number),
+      score_afinn_per_100_words = first(score_afinn_number),
+      score_afinn_raw = first(score_afinn_raw),
       title = first(title),
       review_text = first(review_text),
       .groups = "drop"
@@ -395,7 +506,7 @@ if (length(available_aspect_columns) > 0) {
     ) +
     theme_premium()
 
-  print(p_aspect_mean)
+  show_plot_for_interactive_use(p_aspect_mean)
 
   ggsave(file.path(figures_dir, "aspect_mean_ratings.png"), plot = p_aspect_mean, width = 8.5, height = 5.4, dpi = 300)
 
@@ -424,7 +535,7 @@ if (length(available_aspect_columns) > 0) {
     ) +
     theme_premium()
 
-  print(p_aspect_low)
+  show_plot_for_interactive_use(p_aspect_low)
 
   ggsave(file.path(figures_dir, "aspect_low_score_share.png"), plot = p_aspect_low, width = 8.5, height = 5.4, dpi = 300)
 
@@ -472,14 +583,16 @@ if (length(available_aspect_columns) > 0) {
       axis.text.x = element_text(angle = 35, hjust = 1)
     )
 
-  print(p_aspect_heatmap)
+  show_plot_for_interactive_use(p_aspect_heatmap)
 
   ggsave(file.path(figures_dir, "aspect_yearly_rating_heatmap.png"), plot = p_aspect_heatmap, width = 10, height = 7, dpi = 300)
 
-  cat("Aspect rating analysis complete!\n")
-  cat("- ", file.path(reports_dir, "aspect_rating_summary.csv"), "\n", sep = "")
-  cat("- ", file.path(reports_dir, "high_overall_low_aspect_reviews.csv"), "\n", sep = "")
+    cat("Aspect rating analysis complete!\n")
+    cat("- ", file.path(reports_dir, "aspect_rating_summary.csv"), "\n", sep = "")
+    cat("- ", file.path(reports_dir, "high_overall_low_aspect_reviews.csv"), "\n", sep = "")
+  }
 } else {
+  clear_aspect_outputs()
   warning("No structured aspect rating columns were found in the scored dataset.")
 }
 
@@ -509,8 +622,8 @@ p2 <- ggplot(emotions_summary, aes(x = reorder(emotion, score), y = score, fill 
   ) +
   theme_premium()
 
-# Print the chart so it shows up in RStudio!
-print(p2)
+# Show the chart in RStudio, but do not open a PDF device during Rscript runs.
+show_plot_for_interactive_use(p2)
 
 ggsave(file.path(figures_dir, "emotions_breakdown.png"), plot = p2, width = 8, height = 5, dpi = 300)
 
@@ -541,45 +654,55 @@ sentiment_word_counts <- cleaned_tokens %>%
   count(word, sentiment_score, sort = TRUE)
 
 if (nrow(sentiment_word_counts) == 0) {
-  stop("No AFINN sentiment words were found in the cleaned review tokens.")
+  message("No AFINN sentiment words were found in the cleaned review tokens, so Step 4 is saving a placeholder word cloud and continuing.")
+  save_placeholder_plot(
+    "wordcloud.png",
+    "Sentiment Word Cloud",
+    "No AFINN sentiment words were found after filtering the cleaned review tokens.",
+    width = 5.4,
+    height = 5.4
+  )
+} else {
+  max_sentiment_cloud_words <- min(40, nrow(sentiment_word_counts))
+
+  # Green words are positive sentiment words. Red words are negative sentiment words.
+  sentiment_word_colors <- if_else(sentiment_word_counts$sentiment_score > 0, "#16A085", "#E74C3C")
+
+  cat("Drawing the sentiment-only word cloud...\n")
+
+  # Display the word cloud in the RStudio Plots tab only during interactive use.
+  # In Rscript, the PNG file below is the intended saved output.
+  if (interactive()) {
+    set.seed(123)
+    wordcloud(
+      words = sentiment_word_counts$word,
+      freq = sentiment_word_counts$n,
+      min.freq = 2,
+      max.words = max_sentiment_cloud_words,
+      random.order = FALSE,
+      rot.per = 0.2,
+      ordered.colors = TRUE,
+      colors = sentiment_word_colors
+    )
+  }
+
+  # Open a digital "canvas" to draw the picture on
+  png(file.path(figures_dir, "wordcloud.png"), width = 800, height = 800, res = 150)
+  set.seed(123) # Lock the randomness so the cloud looks exactly the same every time we run it
+
+  # Call the wordcloud drawing tool
+  wordcloud(
+    words = sentiment_word_counts$word, # What sentiment words to draw
+    freq = sentiment_word_counts$n,     # How big to draw them based on frequency
+    min.freq = 2,               # Ignore words that only appeared once
+    max.words = max_sentiment_cloud_words, # Stop drawing after 40 words so it doesn't look messy
+    random.order = FALSE,       # Put the biggest words right in the center
+    rot.per = 0.2,              # Randomly rotate 20% of the words sideways
+    ordered.colors = TRUE,      # Use each word's own positive/negative color
+    colors = sentiment_word_colors # Green means positive, red means negative
+  )
+  dev.off() # Close the digital canvas and save the file!
 }
-
-max_sentiment_cloud_words <- min(40, nrow(sentiment_word_counts))
-
-# Green words are positive sentiment words. Red words are negative sentiment words.
-sentiment_word_colors <- if_else(sentiment_word_counts$sentiment_score > 0, "#16A085", "#E74C3C")
-
-cat("Drawing the sentiment-only word cloud...\n")
-
-# Display the word cloud in the RStudio Plots tab!
-set.seed(123)
-wordcloud(
-  words = sentiment_word_counts$word,
-  freq = sentiment_word_counts$n,
-  min.freq = 2,
-  max.words = max_sentiment_cloud_words,
-  random.order = FALSE,
-  rot.per = 0.2,
-  ordered.colors = TRUE,
-  colors = sentiment_word_colors
-)
-
-# Open a digital "canvas" to draw the picture on
-png(file.path(figures_dir, "wordcloud.png"), width = 800, height = 800, res = 150)
-set.seed(123) # Lock the randomness so the cloud looks exactly the same every time we run it
-
-# Call the wordcloud drawing tool
-wordcloud(
-  words = sentiment_word_counts$word, # What sentiment words to draw
-  freq = sentiment_word_counts$n,     # How big to draw them based on frequency
-  min.freq = 2,               # Ignore words that only appeared once
-  max.words = max_sentiment_cloud_words, # Stop drawing after 40 words so it doesn't look messy
-  random.order = FALSE,       # Put the biggest words right in the center
-  rot.per = 0.2,              # Randomly rotate 20% of the words sideways
-  ordered.colors = TRUE,      # Use each word's own positive/negative color
-  colors = sentiment_word_colors # Green means positive, red means negative
-)
-dev.off() # Close the digital canvas and save the file!
 
 # =====================================================================
 # STEP 7: Draw Sentiment Trend Charts
@@ -595,19 +718,55 @@ trend_reviews <- research_data %>%
   mutate(
     # The TripAdvisor export may use full dates or month-year labels.
     date_parsed = parse_review_dates(review_date),
+    # score_afinn is a raw summed word score. For trend charts, normalize it
+    # by review length so long reviews do not dominate month and year averages.
+    score_afinn_raw = readr::parse_number(as.character(score_afinn)),
+    review_word_count = str_count(coalesce(cleaned_text, ""), "\\S+"),
+    score_afinn_per_100_words = if_else(
+      review_word_count > 0,
+      score_afinn_raw / review_word_count * 100,
+      NA_real_
+    )
+  )
+
+unparseable_review_dates <- trend_reviews %>%
+  filter(is.na(date_parsed), !is.na(review_date), str_squish(as.character(review_date)) != "") %>%
+  distinct(review_date)
+
+if (nrow(unparseable_review_dates) > 0) {
+  stop(
+    paste(
+      "The review_date column contains unsupported or ambiguous month-day review dates.",
+      "Include a four-digit year before running trend charts.",
+      "Problem values:",
+      paste(head(unparseable_review_dates$review_date, 5), collapse = ", ")
+    ),
+    call. = FALSE
+  )
+}
+
+trend_reviews <- trend_reviews %>%
+  mutate(
     month_start = lubridate::floor_date(date_parsed, "month"),
     quarter_start = lubridate::floor_date(date_parsed, "quarter"),
     quarter_label = paste0(lubridate::year(date_parsed), " Q", lubridate::quarter(date_parsed)),
-    year_label = as.character(lubridate::year(date_parsed))
+    year_label = as.character(lubridate::year(date_parsed)),
+    score_afinn = score_afinn_per_100_words
   ) %>%
-  filter(!is.na(date_parsed), !is.na(score_afinn)) # Ignore broken dates and scores
+  # Ignore broken dates and reviews that cannot be normalized.
+  filter(!is.na(date_parsed), !is.na(score_afinn_per_100_words))
 
-# Give every month a simple number: 1, 2, 3, and so on.
-# This makes it easier to draw long timelines because ggplot can place months
-# evenly across the x-axis.
-month_lookup <- trend_reviews %>%
-  distinct(month_start) %>%
-  arrange(month_start) %>%
+# Give every calendar month a simple number: 1, 2, 3, and so on.
+# Some months have no reviews. We still include those empty months so a
+# "6-month rolling average" really means six calendar months, not six reviewed
+# months that may be far apart.
+month_lookup <- tibble(
+  month_start = seq(
+    min(trend_reviews$month_start),
+    max(trend_reviews$month_start),
+    by = "1 month"
+  )
+) %>%
   mutate(
     month_index = row_number(),
     month_label = format(month_start, "%b %Y"),
@@ -654,17 +813,28 @@ format_stat <- function(value) {
   format(round(value, 1), nsmall = 1, trim = TRUE)
 }
 
-# Create one row per month.
-# period_avg is the average sentiment score for that month.
-# review_count tells us how many reviews were written in that month.
-# score_total is used for rolling averages and prior averages.
-month_averages <- trend_reviews %>%
+# First count only the months that actually have reviews.
+reviewed_month_averages <- trend_reviews %>%
   group_by(month_start, month_index, month_label, quarter_start, quarter_label) %>%
   summarise(
     period_avg = mean(score_afinn),
     review_count = n(),
     score_total = sum(score_afinn),
     .groups = "drop"
+  )
+
+# Create one row per calendar month.
+# period_avg is the average sentiment score per 100 cleaned words for that month.
+# review_count tells us how many reviews were written in that month.
+# score_total is used for rolling averages and prior averages.
+month_averages <- month_lookup %>%
+  left_join(
+    reviewed_month_averages,
+    by = c("month_start", "month_index", "month_label", "quarter_start", "quarter_label")
+  ) %>%
+  mutate(
+    review_count = replace_na(review_count, 0L),
+    score_total = replace_na(score_total, 0)
   ) %>%
   arrange(month_start) %>%
   add_prior_period_average() %>%
@@ -676,7 +846,12 @@ month_averages <- trend_reviews %>%
       row_number(),
       ~ {
         window_start <- max(1, .x - 5)
-        sum(score_total[window_start:.x]) / sum(review_count[window_start:.x])
+        window_review_count <- sum(review_count[window_start:.x])
+        if (window_review_count == 0) {
+          NA_real_
+        } else {
+          sum(score_total[window_start:.x]) / window_review_count
+        }
       }
     ),
     # These fields are used for the heatmap.
@@ -688,7 +863,11 @@ month_averages <- trend_reviews %>%
       month.abb[lubridate::month(month_start)],
       levels = month.abb
     ),
-    heatmap_label = paste0(format_stat(period_avg), "\nn=", review_count)
+    heatmap_label = if_else(
+      review_count > 0,
+      paste0(format_stat(period_avg), "\nn=", review_count),
+      "n=0"
+    )
   )
 
 # quarter_bands stores the start and end position of each quarter on the monthly
@@ -800,11 +979,12 @@ p4_heatmap <- ggplot(month_averages, aes(x = month_name, y = year_label, fill = 
     mid = "#F7F9F9",
     high = "#16A085",
     midpoint = 0,
-    name = "Average\nAFINN"
+    name = "Average\nAFINN/100 words",
+    na.value = "#F4F6F7"
   ) +
   labs(
-    title = "Monthly Sentiment Heatmap (AFINN Scores)",
-    subtitle = "Each tile shows monthly average sentiment and review count",
+    title = "Monthly Sentiment Heatmap (AFINN per 100 Cleaned Words)",
+    subtitle = "Each tile shows monthly average length-normalized sentiment and review count",
     x = "Month",
     y = "Year"
   ) +
@@ -814,7 +994,7 @@ p4_heatmap <- ggplot(month_averages, aes(x = month_name, y = year_label, fill = 
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
 
-print(p4_heatmap)
+show_plot_for_interactive_use(p4_heatmap)
 
 ggsave(file.path(figures_dir, "sentiment_trend_monthly_heatmap.png"), plot = p4_heatmap, width = 10, height = 8, dpi = 300)
 
@@ -870,16 +1050,16 @@ p4_rolling <- ggplot() +
   scale_size_continuous(range = c(1.4, 5)) +
   scale_x_continuous(breaks = month_breaks, labels = month_labels) +
   labs(
-    title = "Monthly Sentiment Trend with Rolling Average (AFINN Scores)",
+    title = "Monthly Sentiment Trend with Rolling Average (AFINN per 100 Cleaned Words)",
     subtitle = "Points show monthly averages sized by review count; blue line is the 6-month rolling average; dotted line is prior average",
     x = "Timeline (Month/Year)",
-    y = "AFINN Sentiment Score"
+    y = "AFINN per 100 cleaned words"
   ) +
   theme_premium() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# Print the chart so it shows up in RStudio!
-print(p4_rolling)
+# Show the chart in RStudio, but do not open a PDF device during Rscript runs.
+show_plot_for_interactive_use(p4_rolling)
 
 ggsave(file.path(figures_dir, "sentiment_trend.png"), plot = p4_rolling, width = 10, height = 5.5, dpi = 300)
 ggsave(file.path(figures_dir, "sentiment_trend_monthly_rolling.png"), plot = p4_rolling, width = 10, height = 5.5, dpi = 300)
@@ -919,15 +1099,15 @@ p5 <- ggplot(trend_reviews, aes(x = quarter_index, y = score_afinn, group = quar
   scale_x_continuous(breaks = quarter_breaks, labels = quarter_labels) +
   scale_y_continuous(limits = c(stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
   labs(
-    title = "Quarterly Sentiment Distribution (AFINN Scores)",
+    title = "Quarterly Sentiment Distribution (AFINN per 100 Cleaned Words)",
     subtitle = "Each box summarizes one quarter; labels show quarter avg and n; dotted line shows the average before each quarter",
     x = "Quarter",
-    y = "AFINN Sentiment Score"
+    y = "AFINN per 100 cleaned words"
   ) +
   theme_premium() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
 
-print(p5)
+show_plot_for_interactive_use(p5)
 ggsave(file.path(figures_dir, "sentiment_trend_quarterly.png"), plot = p5, width = 14, height = 6, dpi = 300)
 
 # Yearly boxplot for year-level statistics.
@@ -971,15 +1151,15 @@ p6 <- ggplot(trend_reviews, aes(x = year_index, y = score_afinn, group = year_in
   scale_x_continuous(breaks = year_averages$year_index, labels = year_averages$year_label) +
   scale_y_continuous(limits = c(year_stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
   labs(
-    title = "Yearly Sentiment Distribution (AFINN Scores)",
+    title = "Yearly Sentiment Distribution (AFINN per 100 Cleaned Words)",
     subtitle = "Each box summarizes one year; labels show n, mean, median, quartiles, min, max, and outliers",
     x = "Year",
-    y = "AFINN Sentiment Score"
+    y = "AFINN per 100 cleaned words"
   ) +
   theme_premium() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-print(p6)
+show_plot_for_interactive_use(p6)
 ggsave(file.path(figures_dir, "sentiment_trend_yearly.png"), plot = p6, width = 16, height = 8, dpi = 300)
 
 if (interactive()) {

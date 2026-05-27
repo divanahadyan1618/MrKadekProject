@@ -57,14 +57,16 @@ cat("Successfully loaded", nrow(raw_data), "raw reviews!\n")
 # The %>% symbol is a "pipe". It means "AND THEN".
 # We are taking the raw data, AND THEN changing (mutating) the text column.
 # 
-# Our custom 'clean_text' recipe removes numbers, exclamation marks, and emojis.
 # Our custom 'normalize_slang' recipe fixes internet slang (e.g., sooo -> so).
+# We run it before 'clean_text' so abbreviations with punctuation, such as
+# "w/" and "w/o", can be expanded before the slash is removed.
+# Our custom 'clean_text' recipe removes numbers, exclamation marks, and emojis.
 
 cleaned_reviews_df <- raw_data %>%
   mutate(
     # Create a new column called 'cleaned_text' that contains the scrubbed reviews.
-    cleaned_text = clean_text(review_text),
-    cleaned_text = normalize_slang(cleaned_text)
+    cleaned_text = normalize_slang(review_text),
+    cleaned_text = clean_text(cleaned_text)
   )
 
 # Let's print out the 2nd row to see what the computer did!
@@ -96,6 +98,12 @@ clean_tokens_df <- remove_stopwords(tokenized_df, word_column = "word")
 
 cat("After throwing away useless stopwords, we only have", nrow(clean_tokens_df), "important words left.\n")
 
+# The token file is used only to connect a review ID to each cleaned word.
+# Keeping only these two columns avoids repeating full review text and source
+# metadata thousands of times in the tracked CSV output.
+clean_tokens_for_output <- clean_tokens_df %>%
+  select(review_id, word)
+
 # =====================================================================
 # STEP 6: Save the Clean Data
 # =====================================================================
@@ -107,6 +115,6 @@ cat("After throwing away useless stopwords, we only have", nrow(clean_tokens_df)
 dir.create(dirname(cleaned_reviews_path), recursive = TRUE, showWarnings = FALSE)
 
 write_csv(cleaned_reviews_df, cleaned_reviews_path)
-write_csv(clean_tokens_df, cleaned_tokens_path)
+write_csv(clean_tokens_for_output, cleaned_tokens_path)
 
 cat("Cleaned reviews & tokens successfully saved to the 'data/cleaned/' folder!\n")

@@ -36,85 +36,192 @@ split_r_script <- function(file_path) {
   return(blocks)
 }
 
-# 1. Update 01_data_import.ipynb
-blocks_01 <- split_r_script("01_data_import.R")
-nb_01 <- fromJSON("01_data_import.ipynb", simplifyVector = FALSE)
-code_idx <- 1
-for (i in seq_along(nb_01$cells)) {
-  if (nb_01$cells[[i]]$cell_type == "code") {
-    if (code_idx <= length(blocks_01)) {
-      # Add \n to all lines except last for jupyter format
-      lines <- strsplit(blocks_01[[code_idx]], "\n")[[1]]
-      if (length(lines) > 0) {
-        if(length(lines) > 1) {
-          lines[1:(length(lines)-1)] <- paste0(lines[1:(length(lines)-1)], "\n")
-        }
-        nb_01$cells[[i]]$source <- as.list(lines)
-      }
-      code_idx <- code_idx + 1
-    }
-  }
+# jsonlite writes a plain empty R list as [] in JSON. Notebook metadata needs
+# {}, so this named empty list is used whenever we mean "empty JSON object".
+empty_json_object <- function() {
+  structure(list(), names = character(0))
 }
-write_json(nb_01, "01_data_import.ipynb", auto_unbox = TRUE, pretty = TRUE)
 
-# 2. Update 02_cleaning.ipynb
-blocks_02 <- split_r_script("02_cleaning.R")
-nb_02 <- fromJSON("02_cleaning.ipynb", simplifyVector = FALSE)
-code_idx <- 1
-for (i in seq_along(nb_02$cells)) {
-  if (nb_02$cells[[i]]$cell_type == "code") {
-    if (code_idx <= length(blocks_02)) {
-      lines <- strsplit(blocks_02[[code_idx]], "\n")[[1]]
-      if (length(lines) > 0) {
-        if(length(lines) > 1) {
-          lines[1:(length(lines)-1)] <- paste0(lines[1:(length(lines)-1)], "\n")
-        }
-        nb_02$cells[[i]]$source <- as.list(lines)
-      }
-      code_idx <- code_idx + 1
-    }
-  }
+# A notebook code cell is a small list in the .ipynb JSON file.
+# This helper creates an empty code cell when a script has grown and the
+# notebook does not yet have enough cells for every script block.
+new_code_cell <- function() {
+  list(
+    cell_type = "code",
+    execution_count = NA,
+    metadata = empty_json_object(),
+    outputs = list(),
+    source = list()
+  )
 }
-write_json(nb_02, "02_cleaning.ipynb", auto_unbox = TRUE, pretty = TRUE)
 
-# 3. Update 03_sentiment_analysis.ipynb
-blocks_03 <- split_r_script("03_sentiment_analysis.R")
-nb_03 <- fromJSON("03_sentiment_analysis.ipynb", simplifyVector = FALSE)
-code_idx <- 1
-for (i in seq_along(nb_03$cells)) {
-  if (nb_03$cells[[i]]$cell_type == "code") {
-    if (code_idx <= length(blocks_03)) {
-      lines <- strsplit(blocks_03[[code_idx]], "\n")[[1]]
-      if (length(lines) > 0) {
-        if(length(lines) > 1) {
-          lines[1:(length(lines)-1)] <- paste0(lines[1:(length(lines)-1)], "\n")
-        }
-        nb_03$cells[[i]]$source <- as.list(lines)
-      }
-      code_idx <- code_idx + 1
-    }
+# Jupyter stores code as a list of lines. Every line except the last should end
+# with \n so the notebook shows the same line breaks as the R script.
+block_to_notebook_lines <- function(block) {
+  lines <- strsplit(block, "\n")[[1]]
+  if (length(lines) > 1) {
+    lines[1:(length(lines) - 1)] <- paste0(lines[1:(length(lines) - 1)], "\n")
   }
+  as.list(lines)
 }
-write_json(nb_03, "03_sentiment_analysis.ipynb", auto_unbox = TRUE, pretty = TRUE)
 
-# 4. Update 04_visualization.ipynb
-blocks_04 <- split_r_script("04_visualization.R")
-nb_04 <- fromJSON("04_visualization.ipynb", simplifyVector = FALSE)
-code_idx <- 1
-for (i in seq_along(nb_04$cells)) {
-  if (nb_04$cells[[i]]$cell_type == "code") {
-    if (code_idx <= length(blocks_04)) {
-      lines <- strsplit(blocks_04[[code_idx]], "\n")[[1]]
-      if (length(lines) > 0) {
-        if(length(lines) > 1) {
-          lines[1:(length(lines)-1)] <- paste0(lines[1:(length(lines)-1)], "\n")
-        }
-        nb_04$cells[[i]]$source <- as.list(lines)
+# If a script has more blocks than the notebook has code cells, add cells
+# instead of losing the extra blocks.
+append_missing_code_cells <- function(notebook, required_code_cells) {
+  current_code_cells <- sum(vapply(notebook$cells, function(cell) cell$cell_type == "code", logical(1)))
+  missing_code_cells <- required_code_cells - current_code_cells
+
+  if (missing_code_cells > 0) {
+    for (cell_number in seq_len(missing_code_cells)) {
+      notebook$cells[[length(notebook$cells) + 1]] <- new_code_cell()
+    }
+  }
+
+  notebook
+}
+
+# This copies each script block into the matching notebook code cell.
+# Existing markdown cells are left alone.
+sync_notebook_code_cells <- function(notebook, blocks) {
+  notebook <- append_missing_code_cells(notebook, length(blocks))
+  code_idx <- 1
+
+  for (i in seq_along(notebook$cells)) {
+    if (notebook$cells[[i]]$cell_type == "code" && code_idx <= length(blocks)) {
+      notebook$cells[[i]]$execution_count <- NA
+      if (length(notebook$cells[[i]]$metadata) == 0) {
+        notebook$cells[[i]]$metadata <- empty_json_object()
       }
+      notebook$cells[[i]]$outputs <- list()
+      notebook$cells[[i]]$source <- block_to_notebook_lines(blocks[[code_idx]])
       code_idx <- code_idx + 1
     }
   }
+
+  notebook
 }
-write_json(nb_04, "04_visualization.ipynb", auto_unbox = TRUE, pretty = TRUE)
+
+update_notebook_from_script <- function(script_path, notebook_path) {
+  blocks <- split_r_script(script_path)
+  notebook <- fromJSON(notebook_path, simplifyVector = FALSE)
+  notebook <- sync_notebook_code_cells(notebook, blocks)
+  write_json(notebook, notebook_path, auto_unbox = TRUE, pretty = TRUE, na = "null")
+}
+
+# R code can write project files inside Google Colab, but each file line has to
+# be represented as a quoted string. This helper turns a local file into a
+# writeLines(...) call that can safely recreate that file inside the notebook.
+file_to_colab_write_call <- function(file_path) {
+  file_lines <- readLines(file_path, warn = FALSE)
+  quoted_lines <- vapply(file_lines, encodeString, character(1), quote = "\"")
+  indented_lines <- paste0("  ", quoted_lines, collapse = ",\n")
+
+  paste(
+    "writeLines(",
+    "  c(",
+    indented_lines,
+    "  ),",
+    paste0("  \"", file_path, "\""),
+    ")",
+    sep = "\n"
+  )
+}
+
+build_colab_setup_cell <- function() {
+  paste(
+    "# =====================================================================",
+    "# Setup Shared Project Files",
+    "# =====================================================================",
+    "# Google Colab starts with an empty working folder. This cell installs the",
+    "# R packages used by the project, then creates the same folders and helper",
+    "# files that the local project uses.",
+    "",
+    "required_packages <- c(",
+    "  \"tidyverse\",",
+    "  \"tidytext\",",
+    "  \"syuzhet\",",
+    "  \"wordcloud\",",
+    "  \"RColorBrewer\",",
+    "  \"lubridate\",",
+    "  \"jsonlite\"",
+    ")",
+    "",
+    "# Use a dated CRAN snapshot so rerunning the notebook uses stable package versions.",
+    "# Colab often preinstalls some packages, so install the full required set from",
+    "# the snapshot instead of only installing packages that appear to be missing.",
+    "cran_snapshot_url <- \"https://packagemanager.posit.co/cran/2026-05-26\"",
+    "install.packages(required_packages, repos = cran_snapshot_url)",
+    "",
+    "dir.create(\"scripts\", recursive = TRUE, showWarnings = FALSE)",
+    "dir.create(file.path(\"data\", \"raw\"), recursive = TRUE, showWarnings = FALSE)",
+    "dir.create(file.path(\"data\", \"cleaned\"), recursive = TRUE, showWarnings = FALSE)",
+    "dir.create(file.path(\"output\", \"figures\"), recursive = TRUE, showWarnings = FALSE)",
+    "dir.create(file.path(\"output\", \"reports\"), recursive = TRUE, showWarnings = FALSE)",
+    "",
+    file_to_colab_write_call("scripts/data_config.R"),
+    "",
+    file_to_colab_write_call("scripts/helpers.R"),
+    "",
+    "cat(\"Colab setup complete. Upload reviews.csv before running Step 1, or place the same file at data/raw/reviews.csv.\\n\")",
+    sep = "\n"
+  )
+}
+
+find_code_cell_by_text <- function(notebook, search_text) {
+  cell_matches <- vapply(
+    notebook$cells,
+    function(cell) {
+      isTRUE(cell$cell_type == "code") &&
+        grepl(search_text, paste(unlist(cell$source), collapse = ""), fixed = TRUE)
+    },
+    logical(1)
+  )
+
+  matching_cells <- which(cell_matches)
+  if (length(matching_cells) != 1) {
+    stop(
+      paste(
+        "Expected exactly one Colab code cell containing:",
+        search_text
+      ),
+      call. = FALSE
+    )
+  }
+
+  matching_cells
+}
+
+update_colab_master_notebook <- function(notebook_path) {
+  notebook <- fromJSON(notebook_path, simplifyVector = FALSE)
+  setup_cell_index <- find_code_cell_by_text(notebook, "# Setup Shared Project Files")
+  step_one_cell_index <- find_code_cell_by_text(notebook, "# TripAdvisor Sentiment Analysis - Step 1")
+
+  notebook$cells[[setup_cell_index]]$execution_count <- NA
+  notebook$cells[[setup_cell_index]]$outputs <- list()
+  notebook$cells[[setup_cell_index]]$source <- block_to_notebook_lines(build_colab_setup_cell())
+
+  notebook$cells[[step_one_cell_index]]$execution_count <- NA
+  notebook$cells[[step_one_cell_index]]$outputs <- list()
+  notebook$cells[[step_one_cell_index]]$source <- block_to_notebook_lines(split_r_script("01_data_import.R")[[1]])
+
+  # Some older notebook cells used {} for execution_count, which is not valid
+  # Jupyter metadata. Reset all Colab code counts so the notebook opens cleanly.
+  for (cell_index in seq_along(notebook$cells)) {
+    if (isTRUE(notebook$cells[[cell_index]]$cell_type == "code")) {
+      notebook$cells[[cell_index]]$execution_count <- NA
+      if (length(notebook$cells[[cell_index]]$metadata) == 0) {
+        notebook$cells[[cell_index]]$metadata <- empty_json_object()
+      }
+    }
+  }
+
+  write_json(notebook, notebook_path, auto_unbox = TRUE, pretty = TRUE, na = "null")
+}
+
+update_notebook_from_script("01_data_import.R", "01_data_import.ipynb")
+update_notebook_from_script("02_cleaning.R", "02_cleaning.ipynb")
+update_notebook_from_script("03_sentiment_analysis.R", "03_sentiment_analysis.ipynb")
+update_notebook_from_script("04_visualization.R", "04_visualization.ipynb")
+update_colab_master_notebook("Colab_Master_TripAdvisor.ipynb")
 
 cat("All notebooks successfully updated with ELI5 commented code blocks!\n")

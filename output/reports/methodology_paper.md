@@ -2,11 +2,11 @@
 
 ## Abstract
 
-This methodology paper specifies a reproducible analytical framework for transforming online hotel reviews into structured sentiment evidence. The project uses a prepared TripAdvisor review corpus for Bvlgari Resort Bali and implements a staged R workflow for data validation, text preprocessing, lexicon-based sentiment scoring, emotion extraction, and temporal visualization. The methodological design follows a single-case digital trace research strategy: one luxury resort is treated as a bounded case, while reviews are treated as naturally occurring electronic word-of-mouth records of guest experience. The final analytical dataset contains 762 TripAdvisor reviews from October 2006 to May 2026, including star ratings, review dates, stay dates, reviewer metadata, optional aspect ratings, cleaned review text, Syuzhet sentiment scores, AFINN sentiment scores, and NRC emotion scores.
+This methodology paper specifies a reproducible analytical framework for transforming online hotel reviews into structured sentiment evidence. The project uses a prepared TripAdvisor review corpus for Bvlgari Resort Bali and implements a staged R workflow for data validation, text preprocessing, lexicon-based sentiment scoring, emotion extraction, and temporal visualization. The methodological design follows a single-case digital trace research strategy: one luxury resort is treated as a bounded case, while reviews are treated as naturally occurring electronic word-of-mouth records of guest experience. The final analytical dataset contains 762 TripAdvisor reviews from October 2006 to May 2026, including star ratings, review dates, stay dates, reviewer metadata, optional aspect ratings, cleaned review text, negation-adjusted Syuzhet sentiment scores, negation-adjusted AFINN sentiment scores, and NRC emotion scores.
 
 The implemented framework supports academic analysis of the relationship between numerical ratings, textual sentiment, emotion categories, service-quality dimensions, and time-based review patterns. In addition, this paper proposes a future decision-support extension in which rating and sentiment movement could be monitored as an early-warning control system. That proposed extension would evaluate whether rating, sentiment, low-rating share, negative-emotion indicators, or aspect-specific ratings drift away from rolling baselines over multiple periods. Persistent drift could then be mapped to tiered responses such as watch, investigate, act, and escalate. This management and investment layer is not currently implemented in the project code; it is presented as a future development path that would build on the existing analytical outputs.
 
-The paper also defines the study's limitations. Lexicon-based sentiment scoring is transparent and replicable, but it can misread sarcasm, multilingual expressions, cultural context, and domain-specific meanings. TripAdvisor reviews are not a statistically representative sample of all guests, and observed sentiment is mediated by platform behavior, reviewer motivation, review timing, and unobserved operational conditions. For these reasons, the implemented methodology emphasizes triangulation across ratings, sentiment scores, aspect ratings, review text, and temporal patterns before any future management or investment conclusions are drawn.
+The paper also defines the study's limitations. Lexicon-based sentiment scoring is transparent and replicable, but it can misread sarcasm, complex negation, multilingual expressions, cultural context, and domain-specific meanings. TripAdvisor reviews are not a statistically representative sample of all guests, and observed sentiment is mediated by platform behavior, reviewer motivation, review timing, and unobserved operational conditions. For these reasons, the implemented methodology emphasizes triangulation across ratings, sentiment scores, aspect ratings, review text, and temporal patterns before any future management or investment conclusions are drawn.
 
 Keywords: TripAdvisor, sentiment analysis, hotel reviews, luxury resort, Bvlgari Resort Bali, electronic word of mouth, AFINN, Syuzhet, NRC Emotion Lexicon, service quality, temporal analysis, future decision support.
 
@@ -81,7 +81,7 @@ The project uses a prepared TripAdvisor review CSV located at `data/raw/reviews.
 - `stay_date`
 - `trip_type`
 
-The current raw dataset contains 762 rows and 21 source columns. All rows are associated with Bvlgari Resort Bali and have non-empty review text. The final sentiment-scored dataset contains 762 rows and 35 columns.
+The current raw dataset contains 762 rows and 19 source columns after removing direct reviewer identifiers. All rows are associated with Bvlgari Resort Bali and have non-empty review text. The final sentiment-scored dataset contains 762 rows and 33 columns.
 
 ### 5.2 Temporal Coverage
 
@@ -97,10 +97,10 @@ The raw corpus includes both narrative and structured fields:
 | Review content | `title`, `review_text` | Text cleaning, tokenization, sentiment analysis, qualitative interpretation. |
 | Rating fields | `rating`, `value_rating`, `rooms_rating`, `location_rating`, `cleanliness_rating`, `service_rating`, `sleep_quality_rating` | Rating-sentiment comparison and aspect-level diagnosis. |
 | Time fields | `review_date`, `review_date_raw`, `stay_date` | Monthly, quarterly, yearly, and rolling trend analysis. |
-| Reviewer context | `reviewer_name`, `reviewer_location`, `reviewer_contributions`, `trip_type` | Optional segmentation and bias assessment. |
+| Reviewer context | `reviewer_contributions`, `trip_type` | Optional segmentation and bias assessment without direct reviewer identifiers. |
 | Operational hints | `insider_tip`, `page_offset` | Supplementary context and data provenance. |
 
-Reviewer names are retained in the dataset for traceability but should not be foregrounded in reporting. Academic and managerial outputs should aggregate or anonymize reviewer-level information unless explicit permission exists.
+Direct reviewer identifiers, including bare `author` or `reviewer` fields, are removed from the tracked analysis datasets because they are not required for the implemented aggregate analysis. Academic and managerial outputs should aggregate reviewer-level information unless explicit permission exists.
 
 ### 5.4 Corpus Summary
 
@@ -119,13 +119,13 @@ The current scored dataset has the following descriptive structure:
 | 3-star reviews | 38 |
 | 2-star reviews | 22 |
 | 1-star reviews | 29 |
-| Positive sentiment labels | 741 |
-| Neutral sentiment labels | 1 |
-| Negative sentiment labels | 20 |
-| Mean AFINN score | 17.58 |
-| Median AFINN score | 15.00 |
-| Mean Syuzhet score | 7.33 |
-| Median Syuzhet score | 5.85 |
+| Positive sentiment labels | 733 |
+| Neutral sentiment labels | 2 |
+| Negative sentiment labels | 27 |
+| Mean AFINN score | 21.13 |
+| Median AFINN score | 17.00 |
+| Mean Syuzhet score | 8.60 |
+| Median Syuzhet score | 6.62 |
 
 These figures show a strongly positive and high-rating corpus. This high skew is typical of many luxury-hotel review datasets and makes methodological caution necessary. Mean values alone can hide deterioration in a small but important subset of reviews. Therefore, future monitoring work should include median, low-rating share, negative-share, and aspect-specific indicators in addition to the outputs already generated by the current scripts.
 
@@ -148,7 +148,7 @@ Substantive aspect findings are presented later in the analytical sequence, afte
 
 ## 6. Data Validation and Standardization
 
-The first methodological stage is validation. `01_data_import.R` checks that the prepared CSV exists, has non-zero file size, includes required columns, and contains rows with review text. This step prevents downstream scripts from silently analyzing an incomplete or malformed file.
+The first methodological stage is validation. `01_data_import.R` checks that the prepared CSV exists, has non-zero file size, includes required columns, contains rows with review text, identifies Bvlgari Resort Bali as the only analyzed property, and omits direct reviewer identifiers, forbidden source metadata, TripAdvisor source-disclosure text in trip type values, and embedded contact markers from any raw column. This step prevents downstream scripts from silently analyzing an incomplete, malformed, mixed-property, or privacy-inappropriate file.
 
 The second stage is schema standardization. The helper function `standardize_hotel_reviews()` maps source-specific column names into a consistent internal structure:
 
@@ -159,7 +159,7 @@ The second stage is schema standardization. The helper function `standardize_hot
 - `rating`
 - `review_date`
 
-The function also preserves additional source fields, including aspect ratings and reviewer metadata. This design is important for reproducibility because review exports may differ in column naming. A standardized schema allows the cleaning, scoring, and visualization scripts to remain stable even if the raw export format changes.
+The function also preserves additional source fields, including aspect ratings and non-identifying reviewer context such as contribution counts. Direct reviewer identifiers and source-response metadata are excluded. This design is important for reproducibility because review exports may differ in column naming. A standardized schema allows the cleaning, scoring, and visualization scripts to remain stable even if the raw export format changes.
 
 ## 7. Text Preprocessing
 
@@ -169,11 +169,12 @@ Text preprocessing is implemented in `scripts/helpers.R` through the `clean_text
 
 1. Converts text to lowercase.
 2. Removes HTML tags.
-3. Removes URLs and web handles.
-4. Removes non-ASCII characters and emojis.
-5. Removes punctuation and special symbols.
-6. Removes digits.
-7. Squishes repeated whitespace.
+3. Removes loose angle brackets, URLs, and web handles.
+4. Transliterates accented letters and Unicode punctuation to ASCII where possible.
+5. Replaces remaining non-ASCII characters and emojis with spaces so neighboring words do not get joined together.
+6. Removes punctuation and special symbols.
+7. Removes digits.
+8. Squishes repeated whitespace.
 
 This procedure produces a simplified textual representation suitable for lexicon matching. The main advantage is transparency: the rule set is explicit and reproducible. The main disadvantage is loss of some linguistic nuance. For example, punctuation, capitalization, emojis, and non-English characters may carry sentiment information. This loss is acceptable for a first-stage lexicon workflow, but it should be acknowledged as a limitation.
 
@@ -189,9 +190,11 @@ The `normalize_slang()` function applies a small dictionary of common informal e
 
 This step recognizes that TripAdvisor reviews often include informal language. However, the current dictionary is intentionally conservative. Expanding it should be done carefully and documented because aggressive normalization can erase culturally meaningful expressions.
 
+The helper also standardizes straight and smart apostrophe contractions before sentiment scoring. This matters because expressions such as "don't recommend" or "didn't like" must be converted to explicit negation forms before punctuation and Unicode cleanup, otherwise the negation can be lost and positive words such as "recommend" can be scored incorrectly. Unicode punctuation is also treated as a word boundary rather than deleted, which prevents joined tokens from distorting sentiment scores and aspect key-term reports.
+
 ### 7.3 Tokenization
 
-The cleaned review text is tokenized using `tidytext::unnest_tokens()`, creating one row per word. Tokenization supports word-frequency analysis, stopword removal, word clouds, and sentiment-word filtering. The final token file contains 48,671 token rows after preprocessing.
+The cleaned review text is tokenized using `tidytext::unnest_tokens()`, creating one row per word. Tokenization supports word-frequency analysis, stopword removal, word clouds, and sentiment-word filtering. The final token file contains 48,563 token rows after preprocessing.
 
 ### 7.4 Stopword Removal
 
@@ -203,28 +206,29 @@ Stopwords are removed using the `tidytext` stopword list. This reduces the influ
 
 The study uses lexicon-based sentiment analysis because it is transparent, replicable, and suitable for educational settings. A lexicon approach maps words to preassigned sentiment or emotion values. Unlike black-box machine-learning models, lexicon results can be inspected and explained to non-technical stakeholders. This transparency would also be useful if a future management or investment decision-support layer were added.
 
-The limitation is that lexicons may not fully capture sarcasm, idioms, multilingual content, domain-specific meanings, or context-dependent sentiment. For instance, a word that is negative in a political context may be neutral in a hotel context. The visualization script explicitly excludes some domain-neutral terms from sentiment word clouds when their lexicon meaning is inappropriate for hotel reviews.
+The limitation is that lexicons may not fully capture sarcasm, idioms, multilingual content, domain-specific meanings, complex negation, or context-dependent sentiment. For instance, a word that is negative in a political context may be neutral in a hotel context. The visualization script explicitly excludes some domain-neutral terms from sentiment word clouds when their lexicon meaning is inappropriate for hotel reviews.
 
 ### 8.2 Syuzhet Score
 
-The Syuzhet score is calculated using `syuzhet::get_sentiment(cleaned_text, method = "syuzhet")`. It provides a continuous sentiment estimate for each cleaned review. The project uses the Syuzhet score to classify reviews into:
+The Syuzhet score is calculated with the project's `score_negation_aware_sentiment()` helper using the Syuzhet lexicon. The helper scores each word, then reverses sentiment-bearing words that appear shortly after simple negators such as "not", "never", "without", and "cannot". This prevents phrases such as "cannot recommend" from being treated as positive only because "recommend" is a positive lexicon word. The resulting Syuzhet score provides a continuous sentiment estimate for each cleaned review. The project uses the Syuzhet score to classify reviews into:
 
 - Positive: Syuzhet score greater than 0
 - Negative: Syuzhet score less than 0
 - Neutral: Syuzhet score equal to 0
 
-This classification is simple and transparent, but it should not be overinterpreted. A very slightly positive score and a strongly positive score are both labeled positive, so the continuous score should be retained for analysis.
+This classification is simple and transparent, but it should not be overinterpreted. A very slightly positive score and a strongly positive score are both labeled positive, so the continuous score should be retained for analysis. In the aspect-text diagnostics, Syuzhet is also normalized per 100 cleaned words before aspect-level averaging so that longer reviews do not automatically receive larger aspect sentiment means.
 
 ### 8.3 AFINN Score
 
-The AFINN score is calculated using `syuzhet::get_sentiment(cleaned_text, method = "afinn")`. AFINN assigns integer valence values to sentiment-bearing words and sums them across text. In this project, AFINN is especially useful for:
+The AFINN score is calculated with the same `score_negation_aware_sentiment()` helper using the AFINN lexicon. AFINN assigns integer valence values to sentiment-bearing words and sums them across text after the simple negation adjustment. In this project, AFINN is especially useful for:
 
 - Rating-sentiment boxplots.
-- Monthly, quarterly, and yearly trend charts.
-- Rolling sentiment averages.
-- Prior-period comparisons.
+- Monthly, quarterly, and yearly trend charts, after normalizing AFINN per 100 cleaned words.
+- Rolling sentiment averages, using the same length-normalized trend score.
+- Prior-period comparisons, using the same length-normalized trend score.
+- Aspect-text alignment diagnostics, using the same length-normalized score when comparing low and high aspect ratings.
 
-AFINN scores are sensitive to review length because longer reviews contain more sentiment words. This is not inherently wrong, because longer reviews may express more total evaluative content, but it should be considered when comparing short and long reviews. A possible extension is to compute normalized AFINN per 100 tokens.
+Summed AFINN scores are sensitive to review length because longer reviews contain more sentiment words. This is not inherently wrong, because longer reviews may express more total evaluative content, but it should be considered when comparing short and long reviews. For that reason, the temporal charts calculate AFINN per 100 cleaned words before averaging monthly, quarterly, and yearly periods, and the aspect-text diagnostics use per-100-word AFINN and Syuzhet scores for aspect-level summaries.
 
 ### 8.4 NRC Emotion Scores
 
@@ -465,10 +469,10 @@ The project generates several visual outputs, each with a methodological purpose
 | Aspect-text mismatch counts | Shows where rating and text signals disagree and require qualitative review. |
 | Emotion breakdown | Shows dominant NRC emotion categories across the corpus. |
 | Sentiment word cloud | Highlights frequent sentiment-bearing words after filtering domain-neutral terms. |
-| Monthly heatmap | Shows sentiment intensity by month and year. |
-| Monthly rolling trend | Shows smoothed sentiment movement and prior-average comparison. |
-| Quarterly boxplot | Shows within-quarter sentiment distribution. |
-| Yearly boxplot | Shows long-term distribution, average, median, quartiles, and outliers. |
+| Monthly heatmap | Shows length-normalized sentiment intensity by month and year. |
+| Monthly rolling trend | Shows smoothed length-normalized sentiment movement and prior-average comparison. |
+| Quarterly boxplot | Shows within-quarter distribution of AFINN per 100 cleaned words. |
+| Yearly boxplot | Shows long-term distribution, average, median, quartiles, and outliers for AFINN per 100 cleaned words. |
 
 Visualizations should be interpreted as analytical aids, not as evidence by themselves. Each chart should be connected back to the underlying reviews and operational context.
 
@@ -505,7 +509,7 @@ The project uses online review data, but public availability does not remove eth
 
 1. Report aggregate patterns rather than identifying individual reviewers.
 2. Avoid quoting long review passages unless necessary and properly attributed.
-3. Use reviewer names only for internal traceability, not public reporting.
+3. Do not track reviewer names in this project; if future work requires identifiable reviewer information, keep it outside the public analysis outputs and document the access controls.
 4. Preserve raw text for auditability but limit unnecessary redistribution.
 5. Avoid using sentiment scores to profile or target individual guests.
 6. If decision-support features are later added, treat algorithmic outputs as supporting evidence, not as final judgments.
@@ -521,9 +525,9 @@ First, TripAdvisor reviewers are self-selected. They may not represent all guest
 
 Second, star ratings are skewed toward positive evaluations. In this corpus, the median rating is 5.0, which means small declines in the average may matter even when the overall rating remains high.
 
-Third, lexicon-based sentiment analysis can misinterpret context. It may struggle with sarcasm, negation, multilingual content, idioms, local cultural terms, and luxury-hospitality vocabulary.
+Third, lexicon-based sentiment analysis can misinterpret context. The implemented scoring now handles simple local negation windows, but it may still struggle with sarcasm, complex negation, multilingual content, idioms, local cultural terms, and luxury-hospitality vocabulary.
 
-Fourth, raw AFINN scores are influenced by review length. Longer reviews may receive larger positive or negative totals simply because they contain more sentiment words.
+Fourth, summed AFINN and Syuzhet scores are influenced by review length. Longer reviews may receive larger positive or negative totals simply because they contain more sentiment words. The trend charts and aspect-text diagnostic summaries reduce this problem by using per-100-word sentiment scores where period or aspect means are compared. Any remaining displays that use summed sentiment scores should still be read with review length in mind.
 
 Fifth, review dates may not equal stay dates. A guest may post a review weeks or months after the actual stay. Where possible, stay dates should be used for operational diagnosis and review dates should be used for public-perception timing.
 
@@ -535,7 +539,7 @@ Seventh, investment decisions require financial data not present in the review c
 
 The current methodology can be extended in several ways:
 
-1. Add normalized sentiment scores per 100 tokens.
+1. Compare raw and length-normalized AFINN and Syuzhet side by side in selected diagnostic tables so readers can distinguish total evaluative content from sentiment density.
 2. Extend the current aspect-text analysis from review-level weak labels to sentence-level or phrase-level aspect classification for service, rooms, value, dining, spa, beach, and privacy.
 3. Use manual coding on low-rating and high-negative-emotion reviews to validate automated themes.
 4. Add multilingual handling for non-English reviews.
