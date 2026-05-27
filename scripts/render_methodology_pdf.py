@@ -1,14 +1,15 @@
-"""Render the methodology/report Markdown file to PDF.
+"""Render the report and method Markdown files to PDF.
 
-This project stores the written report as Markdown because Markdown is easy to
-review in git. The final PDF needs a little more work because it must lay out
-tables and figures cleanly. This script reads the Markdown report, converts the
-basic Markdown structures used by this project into ReportLab objects, and saves
-the finished PDF.
+This project stores written papers as Markdown because Markdown is easy to
+review in git. The final PDFs need a little more work because they must lay out
+tables and figures cleanly. This script reads one of the project Markdown files,
+converts the basic Markdown structures used by this project into ReportLab
+objects, and saves the finished PDF.
 """
 
 from __future__ import annotations
 
+import argparse
 import html
 import re
 from pathlib import Path
@@ -32,8 +33,18 @@ from reportlab.platypus import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MARKDOWN_PATH = PROJECT_ROOT / "output" / "reports" / "methodology_paper.md"
-PDF_PATH = PROJECT_ROOT / "output" / "pdf" / "methodology_paper.pdf"
+DOCUMENTS = {
+    "report": {
+        "markdown": PROJECT_ROOT / "output" / "reports" / "bvlgari_review_analysis_report.md",
+        "pdf": PROJECT_ROOT / "output" / "pdf" / "bvlgari_review_analysis_report.pdf",
+        "footer": "TripAdvisor Review Analytics Report for Bvlgari Resort Bali",
+    },
+    "methods": {
+        "markdown": PROJECT_ROOT / "output" / "reports" / "bvlgari_review_analysis_methods.md",
+        "pdf": PROJECT_ROOT / "output" / "pdf" / "bvlgari_review_analysis_methods.pdf",
+        "footer": "Methods: TripAdvisor Review Sentiment Analysis for Bvlgari Resort Bali",
+    },
+}
 
 PAGE_WIDTH, _PAGE_HEIGHT = letter
 LEFT_MARGIN = RIGHT_MARGIN = TOP_MARGIN = BOTTOM_MARGIN = 0.62 * inch
@@ -274,9 +285,9 @@ def make_table(lines: list[str]) -> list:
     return [table, Spacer(1, 7)]
 
 
-def resolve_image_path(markdown_image_path: str) -> Path:
+def resolve_image_path(markdown_image_path: str, markdown_path: Path) -> Path:
     """Resolve an image path written relative to the Markdown file."""
-    candidate = MARKDOWN_PATH.parent / markdown_image_path
+    candidate = markdown_path.parent / markdown_image_path
     if candidate.exists():
         return candidate.resolve()
 
@@ -287,14 +298,14 @@ def resolve_image_path(markdown_image_path: str) -> Path:
     raise FileNotFoundError(f"Could not find image referenced by Markdown: {markdown_image_path}")
 
 
-def make_figure(line: str) -> list:
+def make_figure(line: str, markdown_path: Path) -> list:
     """Convert one Markdown image line into a scaled image plus caption."""
     match = re.fullmatch(r"!\[(.*?)\]\((.*?)\)", line.strip())
     if match is None:
         return []
 
     caption, image_path = match.groups()
-    resolved = resolve_image_path(image_path)
+    resolved = resolve_image_path(image_path, markdown_path)
     with PILImage.open(resolved) as image_file:
         pixel_width, pixel_height = image_file.size
 
@@ -311,7 +322,7 @@ def make_figure(line: str) -> list:
     return [KeepTogether([figure, caption_paragraph])]
 
 
-def markdown_to_story(markdown_text: str) -> list:
+def markdown_to_story(markdown_text: str, markdown_path: Path) -> list:
     """Turn the limited Markdown used by this report into PDF flowables."""
     story = []
     lines = markdown_text.splitlines()
@@ -350,7 +361,7 @@ def markdown_to_story(markdown_text: str) -> list:
             continue
 
         if line.strip().startswith("!["):
-            story.extend(make_figure(line))
+            story.extend(make_figure(line, markdown_path))
         elif line.startswith("# "):
             story.append(Paragraph(inline_markup(line[2:]), STYLES["PaperTitle"]))
         elif line.startswith("## "):
@@ -383,38 +394,62 @@ def markdown_to_story(markdown_text: str) -> list:
     return story
 
 
-def add_footer(canvas, document) -> None:
-    """Add a simple footer to every page."""
-    canvas.saveState()
-    canvas.setFont("Helvetica", 7)
-    canvas.setFillColor(colors.HexColor("#64748b"))
-    canvas.drawString(
-        LEFT_MARGIN,
-        0.36 * inch,
-        "TripAdvisor Review Analytics Report for Bvlgari Resort Bali",
-    )
-    canvas.drawRightString(
-        PAGE_WIDTH - RIGHT_MARGIN,
-        0.36 * inch,
-        f"Page {document.page}",
-    )
-    canvas.restoreState()
+def add_footer_factory(footer_text: str):
+    """Create a footer function with the document-specific title text."""
+
+    def add_footer(canvas, document) -> None:
+        """Add a simple footer to every page."""
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#64748b"))
+        canvas.drawString(LEFT_MARGIN, 0.36 * inch, footer_text)
+        canvas.drawRightString(
+            PAGE_WIDTH - RIGHT_MARGIN,
+            0.36 * inch,
+            f"Page {document.page}",
+        )
+        canvas.restoreState()
+
+    return add_footer
 
 
-def main() -> None:
-    """Build the PDF from the Markdown report."""
-    PDF_PATH.parent.mkdir(parents=True, exist_ok=True)
-    story = markdown_to_story(MARKDOWN_PATH.read_text(encoding="utf-8"))
+def build_pdf(markdown_path: Path, pdf_path: Path, footer_text: str) -> None:
+    """Build one PDF from one Markdown file."""
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    story = markdown_to_story(markdown_path.read_text(encoding="utf-8"), markdown_path)
     document = SimpleDocTemplate(
-        str(PDF_PATH),
+        str(pdf_path),
         pagesize=letter,
         rightMargin=RIGHT_MARGIN,
         leftMargin=LEFT_MARGIN,
         topMargin=TOP_MARGIN,
         bottomMargin=BOTTOM_MARGIN,
     )
-    document.build(story, onFirstPage=add_footer, onLaterPages=add_footer)
-    print(PDF_PATH)
+    footer = add_footer_factory(footer_text)
+    document.build(story, onFirstPage=footer, onLaterPages=footer)
+    print(pdf_path)
+
+
+def main() -> None:
+    """Build the selected PDF file or all configured PDF files."""
+    parser = argparse.ArgumentParser(
+        description="Render project Markdown papers to PDF."
+    )
+    parser.add_argument(
+        "document",
+        nargs="?",
+        choices=["all", "method", *DOCUMENTS.keys()],
+        default="all",
+        help="Which document to render. Defaults to all.",
+    )
+    args = parser.parse_args()
+
+    selected = DOCUMENTS.keys() if args.document == "all" else [args.document]
+    for name in selected:
+        if name == "method":
+            name = "methods"
+        config = DOCUMENTS[name]
+        build_pdf(config["markdown"], config["pdf"], config["footer"])
 
 
 if __name__ == "__main__":
