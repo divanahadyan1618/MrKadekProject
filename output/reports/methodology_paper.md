@@ -1,14 +1,14 @@
-# Methodological Framework for TripAdvisor Sentiment Analysis of Bvlgari Resort Bali and Future Decision-Support Extensions
+# TripAdvisor Review Analytics Report for Bvlgari Resort Bali: Data, Methodology, Results, and Future Decision-Support Extensions
 
 ## Abstract
 
-This methodology paper specifies a reproducible analytical framework for transforming online hotel reviews into structured sentiment evidence. The project uses a prepared TripAdvisor review corpus for Bvlgari Resort Bali and implements a staged R workflow for data validation, text preprocessing, lexicon-based sentiment scoring, emotion extraction, and temporal visualization. The methodological design follows a single-case digital trace research strategy: one luxury resort is treated as a bounded case, while reviews are treated as naturally occurring electronic word-of-mouth records of guest experience. The final analytical dataset contains 762 TripAdvisor reviews from October 2006 to May 2026, including star ratings, review dates, stay dates, reviewer metadata, optional aspect ratings, cleaned review text, negation-adjusted Syuzhet sentiment scores, negation-adjusted AFINN sentiment scores, and NRC emotion scores.
+This report specifies a reproducible analytical framework for transforming online hotel reviews into structured sentiment evidence, and it presents the main descriptive outputs produced by that framework. The project uses a prepared TripAdvisor review corpus for Bvlgari Resort Bali and implements a staged R workflow for data validation, text preprocessing, lexicon-based sentiment scoring, emotion extraction, aspect-rating analysis, annual review profiling, and temporal visualization. The methodological design follows a single-case digital trace research strategy: one luxury resort is treated as a bounded case, while reviews are treated as naturally occurring electronic word-of-mouth records of guest experience. The final analytical dataset contains 762 TripAdvisor reviews from October 2006 to May 2026, including star ratings, review dates, stay dates, reviewer location, contribution counts, optional aspect ratings, cleaned review text, negation-adjusted Syuzhet sentiment scores, negation-adjusted AFINN sentiment scores, and NRC emotion scores.
 
 The implemented framework supports academic analysis of the relationship between numerical ratings, textual sentiment, emotion categories, service-quality dimensions, and time-based review patterns. It now also produces statistical period-monitoring outputs that compare review periods with prior history using length-normalized sentiment, medians, trimmed means, and robust median absolute deviation indicators. A management and investment decision layer is not currently implemented in the project code; it is presented as a future development path that would build on the existing analytical outputs.
 
 The paper also defines the study's limitations. Lexicon-based sentiment scoring is transparent and replicable, but it can misread sarcasm, complex negation, multilingual expressions, cultural context, and domain-specific meanings. TripAdvisor reviews are not a statistically representative sample of all guests, and observed sentiment is mediated by platform behavior, reviewer motivation, review timing, and unobserved operational conditions. For these reasons, the implemented methodology emphasizes triangulation across ratings, sentiment scores, aspect ratings, review text, and temporal patterns before any future management or investment conclusions are drawn.
 
-Keywords: TripAdvisor, sentiment analysis, hotel reviews, luxury resort, Bvlgari Resort Bali, electronic word of mouth, AFINN, Syuzhet, NRC Emotion Lexicon, service quality, temporal analysis, future decision support.
+Keywords: TripAdvisor, sentiment analysis, hotel reviews, luxury resort, Bvlgari Resort Bali, electronic word of mouth, AFINN, Syuzhet, NRC Emotion Lexicon, service quality, annual review profile, temporal analysis, future decision support.
 
 ## 1. Introduction
 
@@ -16,7 +16,7 @@ Online reviews have become a major source of evidence for tourism and hospitalit
 
 This project develops a sentiment-analysis methodology for Bvlgari Resort Bali using TripAdvisor review data. The implemented objective is not merely to classify reviews as positive or negative; it is to create a transparent analytical corpus that can support rating-sentiment comparison, emotion profiling, and temporal interpretation. The methodology is inspired by tourism sentiment studies that combine digital review corpora, text cleaning, lexicon-based scoring, temporal interpretation, and qualitative contextualization. The attached reference paper on informal language and cultural appreciation in TripAdvisor reviews of Balinese Ayam Betutu demonstrates a rigorous academic pattern that is also relevant here: define a bounded tourism object, analyze all accessible reviews in the selected corpus, preprocess text transparently, apply lexicon-based sentiment methods, visualize temporal patterns, interpret discrepancies between ratings and text, and state limitations clearly.
 
-The present methodology extends that type of approach to a luxury-hotel case. The current codebase produces cleaned data, scored sentiment outputs, and visual trend artifacts. A further decision-support layer is proposed as future work: rather than stopping at descriptive sentiment results, a future version could formalize what should happen when the rating or sentiment of reviews drifts away from a baseline over a number of periods. That future extension would require baseline definition, period aggregation, drift thresholds, confidence rules, and action pathways that are not yet coded in the repository.
+The present analytical framework extends that type of approach to a luxury-hotel case. The current codebase produces cleaned data, scored sentiment outputs, annual review-profile summaries, aspect-rating diagnostics, and visual trend artifacts. A further decision-support layer is proposed as future work: rather than stopping at descriptive sentiment results, a future version could formalize what should happen when the rating or sentiment of reviews drifts away from a baseline over a number of periods. That future extension would require baseline definition, period aggregation, drift thresholds, confidence rules, and action pathways that are not yet coded in the repository.
 
 ## 2. Research Purpose and Methodological Objectives
 
@@ -81,7 +81,7 @@ The project uses a prepared TripAdvisor review CSV located at `data/raw/reviews.
 - `stay_date`
 - `trip_type`
 
-The current raw dataset contains 762 rows and 19 source columns after removing direct reviewer identifiers. All rows are associated with Bvlgari Resort Bali and have non-empty review text. The final sentiment-scored dataset contains 762 rows and 33 columns.
+The current raw dataset contains 762 rows and 20 source columns after removing direct reviewer names and source-response metadata while retaining reviewer location for aggregate geographic profiling. All rows are associated with Bvlgari Resort Bali and have non-empty review text. The final sentiment-scored dataset contains 762 rows and 38 columns.
 
 ### 5.2 Temporal Coverage
 
@@ -97,10 +97,10 @@ The raw corpus includes both narrative and structured fields:
 | Review content | `title`, `review_text` | Text cleaning, tokenization, sentiment analysis, qualitative interpretation. |
 | Rating fields | `rating`, `value_rating`, `rooms_rating`, `location_rating`, `cleanliness_rating`, `service_rating`, `sleep_quality_rating` | Rating-sentiment comparison and aspect-level diagnosis. |
 | Time fields | `review_date`, `review_date_raw`, `stay_date` | Monthly, quarterly, yearly, and rolling trend analysis. |
-| Reviewer context | `reviewer_contributions`, `trip_type` | Optional segmentation and bias assessment without direct reviewer identifiers. |
+| Reviewer context | `reviewer_location`, `reviewer_contributions`, `trip_type` | Aggregate geographic profiling and optional segmentation without retaining reviewer names. |
 | Operational hints | `insider_tip`, `page_offset` | Supplementary context and data provenance. |
 
-Direct reviewer identifiers, including bare `author` or `reviewer` fields, are removed from the tracked analysis datasets because they are not required for the implemented aggregate analysis. Academic and managerial outputs should aggregate reviewer-level information unless explicit permission exists.
+Direct reviewer identifiers, including bare `author`, `reviewer`, `reviewer_name`, profile IDs, and profile URLs, are removed from the tracked analysis datasets because they are not required for the implemented aggregate analysis. The `reviewer_location` field is retained because the annual profile uses it only in aggregate form. Academic and managerial outputs should avoid person-level reviewer disclosure unless explicit permission exists.
 
 ### 5.4 Corpus Summary
 
@@ -129,7 +129,40 @@ The current scored dataset has the following descriptive structure:
 
 These figures show a strongly positive and high-rating corpus. This high skew is typical of many luxury-hotel review datasets and makes methodological caution necessary. Mean values alone can hide deterioration in a small but important subset of reviews. Therefore, the current monitoring outputs include median and robust summaries, while future decision-support work should add richer low-rating share, negative-share, and aspect-specific trigger logic.
 
-### 5.5 Structured Aspect Rating Availability
+### 5.5 Annual Review Profile: Temporal, Geographical, and Rating Analysis
+
+The workflow writes `output/reports/annual_review_profile.csv` to summarize the corpus by year. This table follows the logic of the reference paper's annual profile by combining temporal coverage, reviewer geography, rating average, and rating distribution. The geography column uses the prepared dataset's `reviewer_location` field. Because the field is self-reported and incomplete, missing values are labeled `Unknown`, and only locations with at least two reviews in a year are listed. To keep the report readable, the table lists the four most frequent locations at the threshold and reports how many additional qualifying locations were omitted from the printed cell.
+
+| Year | Reviews | Reviewer locations, n>=2 | Avg rating | 5 | 4 | 3 | 2 | 1 |
+|---|---:|---|---:|---:|---:|---:|---:|---:|
+| 2026 | 72 | Unknown (66) | 5.00 | 72 | 0 | 0 | 0 | 0 |
+| 2025 | 18 | Unknown (12) | 4.94 | 17 | 1 | 0 | 0 | 0 |
+| 2024 | 17 | Unknown (8) | 4.47 | 14 | 1 | 0 | 0 | 2 |
+| 2023 | 20 | Unknown (6) | 4.95 | 19 | 1 | 0 | 0 | 0 |
+| 2022 | 25 | Unknown (5), Jakarta, Indonesia (3), Singapore, Singapore (3), Bali, Indonesia (2), plus 1 other locations | 4.52 | 21 | 1 | 0 | 1 | 2 |
+| 2021 | 10 | Indonesia (2), Jakarta, Indonesia (2), Unknown (2) | 4.80 | 9 | 0 | 1 | 0 | 0 |
+| 2020 | 14 | No region reached the minimum review count | 4.93 | 13 | 1 | 0 | 0 | 0 |
+| 2019 | 60 | Unknown (11), New York City, New York (5), Hong Kong, China (4), Singapore, Singapore (4), plus 2 other locations | 4.65 | 50 | 5 | 2 | 0 | 3 |
+| 2018 | 76 | Unknown (14), Hong Kong, China (5), London, United Kingdom (3), Singapore, Singapore (3), plus 6 other locations | 4.68 | 64 | 5 | 3 | 3 | 1 |
+| 2017 | 93 | Unknown (21), Singapore, Singapore (5), London, United Kingdom (4), Sydney, Australia (4), plus 5 other locations | 4.72 | 77 | 10 | 3 | 2 | 1 |
+| 2016 | 89 | Unknown (13), Jakarta, Indonesia (5), Singapore, Singapore (5), Kuala Lumpur, Malaysia (3), plus 6 other locations | 4.48 | 67 | 8 | 8 | 2 | 4 |
+| 2015 | 58 | Unknown (12), Singapore, Singapore (4), Jakarta, Indonesia (2), Melbourne, Australia (2), plus 1 other locations | 4.50 | 41 | 9 | 5 | 2 | 1 |
+| 2014 | 41 | Singapore, Singapore (7), Unknown (3), Brisbane, Australia (2), Hong Kong, China (2), plus 1 other locations | 4.05 | 24 | 8 | 1 | 3 | 5 |
+| 2013 | 48 | Singapore, Singapore (6), Sydney, Australia (3), London, United Kingdom (2), Perth, Australia (2), plus 1 other locations | 4.19 | 32 | 4 | 5 | 3 | 4 |
+| 2012 | 48 | Hong Kong, China (4), Jakarta, Indonesia (4), Sydney, Australia (3), Singapore, Singapore (2), plus 1 other locations | 4.29 | 31 | 7 | 6 | 1 | 3 |
+| 2011 | 23 | Sydney, Australia (2) | 4.22 | 15 | 3 | 2 | 1 | 2 |
+| 2010 | 12 | Singapore, Singapore (2) | 4.08 | 6 | 3 | 2 | 0 | 1 |
+| 2009 | 21 | No region reached the minimum review count | 4.48 | 14 | 5 | 0 | 2 | 0 |
+| 2008 | 10 | No region reached the minimum review count | 4.40 | 6 | 3 | 0 | 1 | 0 |
+| 2007 | 4 | No region reached the minimum review count | 3.75 | 1 | 2 | 0 | 1 | 0 |
+| 2006 | 3 | No region reached the minimum review count | 5.00 | 3 | 0 | 0 | 0 | 0 |
+| Total | 762 | Unknown (178), Singapore, Singapore (45), Jakarta, Indonesia (23), Sydney, Australia (20), plus 67 other locations | 4.56 | 596 | 77 | 38 | 22 | 29 |
+
+The annual profile shows that the dataset is not evenly distributed across time. Review volume is highest in 2016, 2017, 2018, and the partial 2026 period. Years with very low volume, such as 2006 and 2007, should be interpreted cautiously because a small number of reviews can move the annual average sharply. The rating distribution is also highly skewed: 596 of 762 reviews are five-star reviews, while 89 reviews are rated one to three stars. This skew supports the decision to examine low-rating shares, sentiment distributions, and text-level complaints rather than relying only on the overall mean rating.
+
+The reviewer-location profile indicates broad international reach, with Singapore, Jakarta, Sydney, Hong Kong, London, and other major travel markets appearing repeatedly in the table. However, 178 reviews have missing reviewer location, and recent years contain a particularly high share of `Unknown` locations. Therefore, reviewer geography should be treated as contextual evidence about the visible reviewer base, not as a representative market-origin distribution.
+
+### 5.6 Structured Aspect Rating Availability
 
 The dataset also includes structured aspect ratings for value, rooms, location, cleanliness, service, and sleep quality. These fields are not merely supplementary metadata. They provide a middle layer between the overall star rating and the open-ended review text. Overall ratings indicate broad satisfaction, while aspect ratings show which part of the guest experience may be driving satisfaction or dissatisfaction.
 

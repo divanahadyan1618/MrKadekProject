@@ -318,6 +318,177 @@ show_plot_for_interactive_use(p1b)
 
 ggsave(file.path(figures_dir, "sentiment_by_rating_boxplot.png"), plot = p1b, width = 9.5, height = 5.8, dpi = 300)
 
+# ---------------------------------------------------------------------
+# Extra Table: Annual Review Profile
+# ---------------------------------------------------------------------
+# The reference article includes an annual profile table with three ideas:
+# time, reviewer geography, and rating distribution. This project can fully
+# summarize time and ratings. When reviewer_location is present, it is used only
+# as an aggregate region field, not as a person-level identifier.
+minimum_reviews_for_region_listing <- 2
+maximum_regions_listed_per_year <- 4
+possible_geography_columns <- c(
+  "reviewer_location",
+  "reviewer_region",
+  "reviewer_country",
+  "guest_region",
+  "guest_country",
+  "origin_region",
+  "origin_country",
+  "region",
+  "country"
+)
+available_geography_columns <- possible_geography_columns[possible_geography_columns %in% names(research_data)]
+if (length(available_geography_columns) > 0) {
+  available_geography_column <- available_geography_columns[[1]]
+  geography_source_label <- paste("Source column:", available_geography_column)
+} else {
+  available_geography_column <- NA_character_
+  geography_source_label <- "No non-identifying reviewer geography field in prepared dataset"
+}
+
+# Start with one clean row per review for the annual profile table.
+# We parse dates and ratings as numbers so R can group reviews by year and count
+# how many 5-star, 4-star, 3-star, 2-star, and 1-star reviews appear each year.
+annual_profile_reviews <- research_data %>%
+  mutate(
+    date_parsed = parse_review_dates(review_date),
+    year = as.character(lubridate::year(date_parsed)),
+    rating_number = as.integer(round(readr::parse_number(as.character(rating))))
+  ) %>%
+  filter(!is.na(date_parsed), !is.na(year), !is.na(rating_number), rating_number %in% 1:5)
+
+# This small helper counts the number of reviews at each star level.
+# The final columns are ordered from 5 stars down to 1 star to match the paper
+# style in the reference image.
+build_rating_distribution <- function(data) {
+  rating_columns <- paste0("rating_", 5:1, "_star_reviews")
+
+  data %>%
+    count(year, rating_number, name = "rating_count") %>%
+    tidyr::complete(year, rating_number = 1:5, fill = list(rating_count = 0)) %>%
+    mutate(rating_column = paste0("rating_", rating_number, "_star_reviews")) %>%
+    select(year, rating_column, rating_count) %>%
+    pivot_wider(names_from = rating_column, values_from = rating_count, values_fill = 0) %>%
+    select(year, all_of(rating_columns))
+}
+
+# This helper lists the most common reviewer locations that appear at least
+# twice in the same year. Missing locations are labeled "Unknown" so the table
+# is honest about incomplete geography coverage. The list is capped because a
+# long free-text location column can otherwise make the report unreadable.
+build_region_summary <- function(data) {
+  if (is.na(available_geography_column)) {
+    return(
+      data %>%
+        distinct(year) %>%
+        mutate(regions_with_minimum_reviews = "Not available in prepared dataset")
+    )
+  }
+
+  region_counts <- data %>%
+    mutate(region_name = str_squish(as.character(.data[[available_geography_column]]))) %>%
+    mutate(
+      region_name = na_if(region_name, ""),
+      region_name = replace_na(region_name, "Unknown")
+    ) %>%
+    count(year, region_name, name = "review_count") %>%
+    filter(review_count >= minimum_reviews_for_region_listing) %>%
+    arrange(year, desc(review_count), region_name)
+
+  all_years <- data %>%
+    distinct(year)
+
+  if (nrow(region_counts) == 0) {
+    return(
+      all_years %>%
+        mutate(regions_with_minimum_reviews = "No region reached the minimum review count")
+    )
+  }
+
+  region_counts %>%
+    group_by(year) %>%
+    mutate(
+      total_regions_at_threshold = n(),
+      region_rank = row_number()
+    ) %>%
+    filter(region_rank <= maximum_regions_listed_per_year) %>%
+    summarise(
+      listed_regions = paste0(region_name, " (", review_count, ")", collapse = ", "),
+      omitted_region_count = max(total_regions_at_threshold) - n(),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      regions_with_minimum_reviews = if_else(
+        omitted_region_count > 0,
+        paste0(listed_regions, ", plus ", omitted_region_count, " other locations"),
+        listed_regions
+      )
+    ) %>%
+    select(year, regions_with_minimum_reviews) %>%
+    right_join(all_years, by = "year") %>%
+    mutate(
+      regions_with_minimum_reviews = replace_na(
+        regions_with_minimum_reviews,
+        "No region reached the minimum review count"
+      )
+    )
+}
+
+annual_rating_distribution <- build_rating_distribution(annual_profile_reviews)
+annual_region_summary <- build_region_summary(annual_profile_reviews)
+
+# Combine the yearly review counts, date range, geography status, rating
+# average, and rating distribution into one CSV table for the paper.
+annual_review_profile_years <- annual_profile_reviews %>%
+  group_by(year) %>%
+  summarise(
+    review_count = n(),
+    review_date_start = min(date_parsed),
+    review_date_end = max(date_parsed),
+    rating_average = round(mean(rating_number), 2),
+    .groups = "drop"
+  ) %>%
+  left_join(annual_region_summary, by = "year") %>%
+  left_join(annual_rating_distribution, by = "year") %>%
+  mutate(geography_source = geography_source_label) %>%
+  arrange(desc(as.integer(year)))
+
+annual_review_profile_total <- annual_profile_reviews %>%
+  mutate(year = "Total") %>%
+  group_by(year) %>%
+  summarise(
+    review_count = n(),
+    review_date_start = min(date_parsed),
+    review_date_end = max(date_parsed),
+    rating_average = round(mean(rating_number), 2),
+    .groups = "drop"
+  ) %>%
+  left_join(build_region_summary(mutate(annual_profile_reviews, year = "Total")), by = "year") %>%
+  left_join(build_rating_distribution(mutate(annual_profile_reviews, year = "Total")), by = "year") %>%
+  mutate(geography_source = geography_source_label)
+
+annual_review_profile <- bind_rows(
+  annual_review_profile_years,
+  annual_review_profile_total
+) %>%
+  select(
+    year,
+    review_count,
+    review_date_start,
+    review_date_end,
+    regions_with_minimum_reviews,
+    geography_source,
+    rating_average,
+    rating_5_star_reviews,
+    rating_4_star_reviews,
+    rating_3_star_reviews,
+    rating_2_star_reviews,
+    rating_1_star_reviews
+  )
+
+write_csv(annual_review_profile, annual_review_profile_path)
+
 # =====================================================================
 # STEP 4: Analyze Structured Aspect Ratings
 # =====================================================================
@@ -422,7 +593,7 @@ if (length(available_aspect_columns) > 0) {
     arrange(mean_rating)
 
   # Save a CSV report so the exact numbers behind the charts are easy to inspect
-  # or reuse in the methodology paper.
+  # or reuse in the analysis report.
   write_csv(
     aspect_summary %>%
       transmute(

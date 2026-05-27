@@ -1,0 +1,23 @@
+year,review_count,review_date_start,review_date_end,regions_with_minimum_reviews,geography_source,rating_average,rating_5_star_reviews,rating_4_star_reviews,rating_3_star_reviews,rating_2_star_reviews,rating_1_star_reviews
+2026,72,2026-01-01,2026-05-18,Unknown (66),Source column: reviewer_location,5,72,0,0,0,0
+2025,18,2025-01-01,2025-12-01,Unknown (12),Source column: reviewer_location,4.94,17,1,0,0,0
+2024,17,2024-01-01,2024-12-01,Unknown (8),Source column: reviewer_location,4.47,14,1,0,0,2
+2023,20,2023-01-01,2023-11-01,Unknown (6),Source column: reviewer_location,4.95,19,1,0,0,0
+2022,25,2022-01-01,2022-12-01,"Unknown (5), Jakarta, Indonesia (3), Singapore, Singapore (3), Bali, Indonesia (2), plus 1 other locations",Source column: reviewer_location,4.52,21,1,0,1,2
+2021,10,2021-04-01,2021-12-01,"Indonesia (2), Jakarta, Indonesia (2), Unknown (2)",Source column: reviewer_location,4.8,9,0,1,0,0
+2020,14,2020-01-01,2020-08-01,No region reached the minimum review count,Source column: reviewer_location,4.93,13,1,0,0,0
+2019,60,2019-01-01,2019-12-01,"Unknown (11), New York City, New York (5), Hong Kong, China (4), Singapore, Singapore (4), plus 2 other locations",Source column: reviewer_location,4.65,50,5,2,0,3
+2018,76,2018-01-01,2018-12-01,"Unknown (14), Hong Kong, China (5), London, United Kingdom (3), Singapore, Singapore (3), plus 6 other locations",Source column: reviewer_location,4.68,64,5,3,3,1
+2017,93,2017-01-01,2017-12-01,"Unknown (21), Singapore, Singapore (5), London, United Kingdom (4), Sydney, Australia (4), plus 5 other locations",Source column: reviewer_location,4.72,77,10,3,2,1
+2016,89,2016-01-01,2016-12-01,"Unknown (13), Jakarta, Indonesia (5), Singapore, Singapore (5), Kuala Lumpur, Malaysia (3), plus 6 other locations",Source column: reviewer_location,4.48,67,8,8,2,4
+2015,58,2015-01-01,2015-12-01,"Unknown (12), Singapore, Singapore (4), Jakarta, Indonesia (2), Melbourne, Australia (2), plus 1 other locations",Source column: reviewer_location,4.5,41,9,5,2,1
+2014,41,2014-01-01,2014-12-01,"Singapore, Singapore (7), Unknown (3), Brisbane, Australia (2), Hong Kong, China (2), plus 1 other locations",Source column: reviewer_location,4.05,24,8,1,3,5
+2013,48,2013-01-01,2013-12-01,"Singapore, Singapore (6), Sydney, Australia (3), London, United Kingdom (2), Perth, Australia (2), plus 1 other locations",Source column: reviewer_location,4.19,32,4,5,3,4
+2012,48,2012-01-01,2012-12-01,"Hong Kong, China (4), Jakarta, Indonesia (4), Sydney, Australia (3), Singapore, Singapore (2), plus 1 other locations",Source column: reviewer_location,4.29,31,7,6,1,3
+2011,23,2011-01-01,2011-12-01,"Sydney, Australia (2)",Source column: reviewer_location,4.22,15,3,2,1,2
+2010,12,2010-01-01,2010-11-01,"Singapore, Singapore (2)",Source column: reviewer_location,4.08,6,3,2,0,1
+2009,21,2009-02-01,2009-12-01,No region reached the minimum review count,Source column: reviewer_location,4.48,14,5,0,2,0
+2008,10,2008-02-01,2008-12-01,No region reached the minimum review count,Source column: reviewer_location,4.4,6,3,0,1,0
+2007,4,2007-06-01,2007-10-01,No region reached the minimum review count,Source column: reviewer_location,3.75,1,2,0,1,0
+2006,3,2006-10-01,2006-11-01,No region reached the minimum review count,Source column: reviewer_location,5,3,0,0,0,0
+Total,762,2006-10-01,2026-05-18,"Unknown (178), Singapore, Singapore (45), Jakarta, Indonesia (23), Sydney, Australia (20), plus 67 other locations",Source column: reviewer_location,4.56,596,77,38,22,29

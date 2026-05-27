@@ -340,7 +340,8 @@ prepare_length_normalized_sentiment <- function(data) {
 #' `ratings.Overall`, and `date_stayed`. This function maps common variants into
 #' the columns used by the rest of the workflow. Extra source fields are kept
 #' only when they are useful for analysis and do not expose response metadata,
-#' source URLs, or direct reviewer identifiers.
+#' source URLs, or direct reviewer identifiers. Reviewer location is kept as
+#' geographic context because the project only uses it in aggregate tables.
 #'
 #' @param raw_data A dataframe read from the raw reviews CSV.
 #' @return A tibble with standardized columns plus any extra source metadata.
@@ -350,16 +351,20 @@ standardize_hotel_reviews <- function(raw_data) {
     stop("The raw review dataset is empty.", call. = FALSE)
   }
   
-  normalized_names <- names(raw_data) %>%
-    str_to_lower() %>%
-    str_replace_all("[^a-z0-9]+", "_") %>%
-    str_replace_all("^_|_$", "")
-  
-  find_column <- function(candidates, required = FALSE) {
-    normalized_candidates <- candidates %>%
+  normalize_source_column_names <- function(column_names) {
+    column_names %>%
+      str_replace_all("([a-z0-9])([A-Z])", "\\1_\\2") %>%
       str_to_lower() %>%
       str_replace_all("[^a-z0-9]+", "_") %>%
       str_replace_all("^_|_$", "")
+  }
+
+  normalized_names <- names(raw_data) %>%
+    normalize_source_column_names()
+  
+  find_column <- function(candidates, required = FALSE) {
+    normalized_candidates <- candidates %>%
+      normalize_source_column_names()
     
     match_index <- match(normalized_candidates, normalized_names, nomatch = 0)
     match_index <- match_index[match_index > 0]
@@ -426,13 +431,13 @@ standardize_hotel_reviews <- function(raw_data) {
 
   # Direct reviewer identifiers are not needed for this aggregate analysis.
   # Dropping them keeps generated, tracked datasets focused on the review
-  # content and ratings instead of personal profile details.
+  # content and ratings instead of personal profile details. Reviewer location
+  # is allowed because it supports aggregate geography summaries.
   direct_reviewer_identifier_columns <- c(
     "author",
     "reviewer",
     "reviewer_id",
     "reviewer_name",
-    "reviewer_location",
     "name",
     "user_id",
     "user_name",
@@ -445,6 +450,10 @@ standardize_hotel_reviews <- function(raw_data) {
     "reviewer_profile_url",
     "user_profile_url"
   )
+  allowed_reviewer_geography_columns <- c(
+    "reviewer_location"
+  )
+  normalized_allowed_reviewer_geography_columns <- normalize_source_column_names(allowed_reviewer_geography_columns)
   forbidden_source_metadata_columns <- c(
     "reviewer_helpful_votes",
     "machine_translated",
@@ -489,16 +498,34 @@ standardize_hotel_reviews <- function(raw_data) {
     compact_extra_names %in% compact_direct_reviewer_identifier_columns |
     str_detect(normalized_extra_names, direct_reviewer_identifier_pattern) |
     str_detect(compact_extra_names, "^(reviewer|user|author|member|profile).*(id|name|location|url)$")
+  is_allowed_reviewer_geography <- normalized_extra_names %in% normalized_allowed_reviewer_geography_columns
   is_forbidden_source_metadata <- normalized_extra_names %in% forbidden_source_metadata_columns |
     compact_extra_names %in% compact_forbidden_source_metadata_columns |
     str_detect(normalized_extra_names, forbidden_source_metadata_pattern) |
     str_detect(compact_extra_names, "^managementresponse|url$")
   extra_columns <- extra_columns[
-    !is_direct_reviewer_identifier & !is_forbidden_source_metadata
+    (!is_direct_reviewer_identifier | is_allowed_reviewer_geography) & !is_forbidden_source_metadata
   ]
 
   if (length(extra_columns) > 0) {
-    standardized <- bind_cols(standardized, raw_data[extra_columns])
+    # Keep reviewer geography under one canonical column name. This lets
+    # exports such as reviewerLocation or "Reviewer Location" feed the same
+    # annual profile code as reviewer_location.
+    extra_data <- raw_data[extra_columns]
+    allowed_geography_extra_columns <- extra_columns[
+      normalized_name_lookup[extra_columns] %in% normalized_allowed_reviewer_geography_columns
+    ]
+
+    if (length(allowed_geography_extra_columns) > 0) {
+      reviewer_location_values <- purrr::reduce(
+        raw_data[allowed_geography_extra_columns],
+        dplyr::coalesce
+      )
+      extra_data <- extra_data[setdiff(names(extra_data), allowed_geography_extra_columns)]
+      extra_data[["reviewer_location"]] <- as.character(reviewer_location_values)
+    }
+
+    standardized <- bind_cols(standardized, extra_data)
   }
 
   standardized <- standardized %>%

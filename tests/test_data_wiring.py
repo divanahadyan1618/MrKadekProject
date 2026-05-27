@@ -177,6 +177,58 @@ class DataWiringTests(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
+    def test_data_import_allows_reviewer_location_for_geography_summaries(self):
+        temp_dir, project_copy = self.copy_project_for_workflow_test()
+        try:
+            raw_path = project_copy / "data" / "raw" / "reviews.csv"
+            raw_path.write_text(
+                "\n".join(
+                    [
+                        "review_id,hotel_name,title,review_text,rating,review_date,stay_date,trip_type,reviewer_location",
+                        "1,Bvlgari Resort Bali,Good stay,The room was excellent.,5,May 2026,May 2026,Couple,Jakarta Indonesia",
+                    ]
+                )
+                + "\n"
+            )
+            result = subprocess.run(
+                ["Rscript", "01_data_import.R"],
+                cwd=project_copy,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=120,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def test_data_import_rejects_non_whitelisted_location_metadata(self):
+        temp_dir, project_copy = self.copy_project_for_workflow_test()
+        try:
+            raw_path = project_copy / "data" / "raw" / "reviews.csv"
+            raw_path.write_text(
+                "\n".join(
+                    [
+                        "review_id,hotel_name,title,review_text,rating,review_date,stay_date,trip_type,user_location",
+                        "1,Bvlgari Resort Bali,Good stay,The room was excellent.,5,May 2026,May 2026,Couple,Jakarta Indonesia",
+                    ]
+                )
+                + "\n"
+            )
+            result = subprocess.run(
+                ["Rscript", "01_data_import.R"],
+                cwd=project_copy,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=120,
+            )
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("direct reviewer identifier", (result.stdout + result.stderr).lower())
+            self.assertIn("user_location", result.stdout + result.stderr)
+        finally:
+            shutil.rmtree(temp_dir)
+
     def test_data_import_rejects_bare_author_and_reviewer_columns(self):
         temp_dir, project_copy = self.copy_project_for_workflow_test()
         try:
@@ -356,18 +408,23 @@ class DataWiringTests(unittest.TestCase):
             with self.subTest(column=column):
                 self.assertNotIn(column, columns)
 
-    def test_tracked_csv_outputs_omit_direct_reviewer_identifiers(self):
-        paths = [
+    def test_tracked_csv_outputs_omit_direct_reviewer_identifiers_but_keep_location_context(self):
+        review_level_paths = [
             PROJECT_ROOT / "data" / "raw" / "reviews.csv",
             PROJECT_ROOT / "data" / "cleaned" / "hotel_cleaned_reviews.csv",
-            PROJECT_ROOT / "data" / "cleaned" / "hotel_cleaned_tokens.csv",
             PROJECT_ROOT / "data" / "cleaned" / "hotel_sentiment_scores.csv",
         ]
-        for path in paths:
+        for path in review_level_paths:
             with self.subTest(path=path):
                 columns = path.read_text().splitlines()[0].split(",")
                 self.assertNotIn("reviewer_name", columns)
-                self.assertNotIn("reviewer_location", columns)
+                self.assertIn("reviewer_location", columns)
+
+        token_columns = (
+            PROJECT_ROOT / "data" / "cleaned" / "hotel_cleaned_tokens.csv"
+        ).read_text().splitlines()[0].split(",")
+        self.assertNotIn("reviewer_name", token_columns)
+        self.assertNotIn("reviewer_location", token_columns)
 
     def test_standardized_reviews_drop_future_reviewer_identifier_columns(self):
         r_code = """
@@ -383,6 +440,7 @@ class DataWiringTests(unittest.TestCase):
           user_id = "user-456",
           author_id = "author-789",
           member_id = "member-000",
+          reviewer_location = "Jakarta Indonesia",
           reviewer_contributions = "12"
         )
         standardized <- standardize_hotel_reviews(example_reviews)
@@ -390,8 +448,100 @@ class DataWiringTests(unittest.TestCase):
         if (any(forbidden %in% names(standardized))) {
           stop("Direct reviewer identifier columns were retained.")
         }
+        if (!"reviewer_location" %in% names(standardized)) {
+          stop("Reviewer location should be retained for aggregate geography summaries.")
+        }
         if (!"reviewer_contributions" %in% names(standardized)) {
           stop("Non-identifying reviewer contribution count was removed.")
+        }
+        """
+        result = subprocess.run(
+            ["Rscript", "-e", r_code],
+            cwd=PROJECT_ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_standardized_reviews_only_keep_whitelisted_reviewer_location_context(self):
+        r_code = """
+        source("scripts/helpers.R")
+        example_reviews <- tibble::tibble(
+          review_id = "r1",
+          hotel_name = "Bvlgari Resort Bali",
+          title = "Great stay",
+          review_text = "The room was excellent.",
+          rating = "5",
+          review_date = "Apr 2026",
+          reviewer_location = "Jakarta Indonesia",
+          user_location = "Private user place",
+          author_location = "Private author place",
+          member_location = "Private member place",
+          profile_location = "Private profile place"
+        )
+        standardized <- standardize_hotel_reviews(example_reviews)
+        if (!"reviewer_location" %in% names(standardized)) {
+          stop("Reviewer location should be retained for aggregate geography summaries.")
+        }
+        forbidden <- c("user_location", "author_location", "member_location", "profile_location")
+        if (any(forbidden %in% names(standardized))) {
+          stop("Non-whitelisted reviewer location metadata was retained.")
+        }
+        """
+        result = subprocess.run(
+            ["Rscript", "-e", r_code],
+            cwd=PROJECT_ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_standardized_reviews_canonicalize_reviewer_location_aliases(self):
+        r_code = """
+        source("scripts/helpers.R")
+
+        camel_case_reviews <- tibble::tibble(
+          review_id = "r1",
+          hotel_name = "Bvlgari Resort Bali",
+          title = "Great stay",
+          review_text = "The room was excellent.",
+          rating = "5",
+          review_date = "Apr 2026",
+          reviewerLocation = "Jakarta Indonesia"
+        )
+        camel_case_standardized <- standardize_hotel_reviews(camel_case_reviews)
+        if (!"reviewer_location" %in% names(camel_case_standardized)) {
+          stop("Camel-case reviewer location was not canonicalized.")
+        }
+        if ("reviewerLocation" %in% names(camel_case_standardized)) {
+          stop("Camel-case reviewer location leaked through under its source name.")
+        }
+        if (camel_case_standardized$reviewer_location[[1]] != "Jakarta Indonesia") {
+          stop("Camel-case reviewer location value changed during standardization.")
+        }
+
+        spaced_reviews <- tibble::tibble(
+          review_id = "r2",
+          hotel_name = "Bvlgari Resort Bali",
+          title = "Great stay",
+          review_text = "The room was excellent.",
+          rating = "5",
+          review_date = "Apr 2026",
+          `Reviewer Location` = "Singapore Singapore"
+        )
+        spaced_standardized <- standardize_hotel_reviews(spaced_reviews)
+        if (!"reviewer_location" %in% names(spaced_standardized)) {
+          stop("Spaced reviewer location was not canonicalized.")
+        }
+        if ("Reviewer Location" %in% names(spaced_standardized)) {
+          stop("Spaced reviewer location leaked through under its source name.")
+        }
+        if (spaced_standardized$reviewer_location[[1]] != "Singapore Singapore") {
+          stop("Spaced reviewer location value changed during standardization.")
         }
         """
         result = subprocess.run(
@@ -854,6 +1004,7 @@ class DataWiringTests(unittest.TestCase):
             "output/reports/aspect_text_key_phrases.csv",
             "output/reports/aspect_text_mismatches.csv",
             "output/reports/aspect_qualitative_examples.csv",
+            "output/reports/annual_review_profile.csv",
         ]
         for path in paths:
             with self.subTest(path=path):
@@ -1623,6 +1774,27 @@ class DataWiringTests(unittest.TestCase):
         self.assertIn("period_max", script)
         self.assertIn("n_outliers", script)
         self.assertNotIn("Series avg:", script)
+
+    def test_visualization_writes_annual_review_profile_with_location_and_rating_distribution(self):
+        script = (PROJECT_ROOT / "04_visualization.R").read_text()
+        self.assertIn("Annual Review Profile", script)
+        self.assertIn("annual_review_profile_path", script)
+        self.assertIn("reviewer_location", script)
+        self.assertIn("regions_with_minimum_reviews", script)
+        self.assertIn("rating_5_star_reviews", script)
+        self.assertIn("rating_1_star_reviews", script)
+
+        with (PROJECT_ROOT / "output" / "reports" / "annual_review_profile.csv").open(
+            newline="", encoding="utf-8"
+        ) as handle:
+            rows = list(csv.DictReader(handle))
+
+        self.assertTrue(rows)
+        self.assertEqual(rows[-1]["year"], "Total")
+        self.assertEqual(rows[-1]["review_count"], "762")
+        self.assertEqual(rows[-1]["rating_5_star_reviews"], "596")
+        self.assertEqual(rows[-1]["rating_1_star_reviews"], "29")
+        self.assertIn("Singapore, Singapore", rows[-1]["regions_with_minimum_reviews"])
 
     def test_aspect_text_analysis_links_aspects_to_review_text(self):
         script = (PROJECT_ROOT / "05_aspect_text_analysis.R").read_text()

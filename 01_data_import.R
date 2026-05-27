@@ -22,7 +22,6 @@ direct_reviewer_identifier_columns <- c(
   "reviewer",
   "reviewer_id",
   "reviewer_name",
-  "reviewer_location",
   "name",
   "user_id",
   "user_name",
@@ -34,6 +33,10 @@ direct_reviewer_identifier_columns <- c(
   "profile_url",
   "reviewer_profile_url",
   "user_profile_url"
+)
+
+allowed_reviewer_geography_columns <- c(
+  "reviewer_location"
 )
 
 forbidden_source_metadata_columns <- c(
@@ -80,6 +83,7 @@ find_direct_reviewer_identifier_columns <- function(column_names) {
   compact_names <- gsub("_", "", normalized_names)
   normalized_forbidden <- normalize_column_name(direct_reviewer_identifier_columns)
   compact_forbidden <- gsub("_", "", normalized_forbidden)
+  normalized_allowed_geography <- normalize_column_name(allowed_reviewer_geography_columns)
   direct_identifier_pattern <- paste(
     c(
       "(^|_)reviewer_?id$",
@@ -92,10 +96,12 @@ find_direct_reviewer_identifier_columns <- function(column_names) {
     collapse = "|"
   )
 
-  is_forbidden <- normalized_names %in% normalized_forbidden |
+  is_direct_identifier <- normalized_names %in% normalized_forbidden |
     compact_names %in% compact_forbidden |
     grepl(direct_identifier_pattern, normalized_names, perl = TRUE) |
     grepl("^(reviewer|user|author|member|profile).*(id|name|location|url)$", compact_names, perl = TRUE)
+  is_allowed_geography <- normalized_names %in% normalized_allowed_geography
+  is_forbidden <- is_direct_identifier & !is_allowed_geography
 
   column_names[is_forbidden]
 }
