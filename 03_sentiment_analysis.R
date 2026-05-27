@@ -57,13 +57,53 @@ cat("Loaded", nrow(cleaned_reviews), "cleaned reviews for emotional scoring.\n")
 # The helper below flips sentiment words that appear right after negators such
 # as "not", "never", "without", or "cannot". This keeps phrases like "cannot
 # recommend" from being counted as positive just because "recommend" is positive.
+# We also count the words in each cleaned review. The raw sentiment scores are
+# still saved, but the workflow also creates length-normalized scores using the
+# median review length in this dataset. That means the denominator comes from the
+# hotel's own data instead of from a round number chosen by hand.
 
 # 'mutate' means "create a new column in our table".
 sentiment_results <- cleaned_reviews %>%
   mutate(
+    # review_word_count stores how long each cleaned review is.
+    # We need this because raw sentiment scores grow when a review has more words.
+    review_word_count = count_cleaned_words(cleaned_text),
     score_syuzhet = score_negation_aware_sentiment(cleaned_text, method = "syuzhet"),
     score_afinn = score_negation_aware_sentiment(cleaned_text, method = "afinn")
   )
+
+# Find the "typical" review length in this dataset.
+# We ignore empty reviews because a review with 0 words cannot be used as a
+# sensible denominator.
+median_review_word_count <- sentiment_results %>%
+  filter(review_word_count > 0) %>%
+  summarise(value = median(review_word_count), .groups = "drop") %>%
+  pull(value)
+
+# If every cleaned review somehow had 0 words, normalization would be impossible.
+# Stop here with a plain explanation instead of creating misleading NA scores.
+if (length(median_review_word_count) == 0 || is.na(median_review_word_count)) {
+  stop("No cleaned words were found, so sentiment scores cannot be length-normalized.", call. = FALSE)
+}
+
+sentiment_results <- sentiment_results %>%
+  mutate(
+    median_review_word_count = median_review_word_count,
+    # These normalized scores keep the original direction of sentiment but put
+    # short and long reviews onto the same typical-review length.
+    score_syuzhet_per_median_review = normalize_score_to_word_count(
+      score_syuzhet,
+      review_word_count,
+      median_review_word_count
+    ),
+    score_afinn_per_median_review = normalize_score_to_word_count(
+      score_afinn,
+      review_word_count,
+      median_review_word_count
+    )
+  )
+
+cat("Median cleaned review length used for normalization:", median_review_word_count, "words\n")
 
 # =====================================================================
 # STEP 4: Classify the Scores into Simple Categories

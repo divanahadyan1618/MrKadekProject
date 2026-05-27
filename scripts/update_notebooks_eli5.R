@@ -65,6 +65,12 @@ block_to_notebook_lines <- function(block) {
   as.list(lines)
 }
 
+# Read a whole R script as one text block. The Colab master notebook needs this
+# when a full script should live inside a single notebook code cell.
+read_script_as_block <- function(script_path) {
+  paste(readLines(script_path, warn = FALSE), collapse = "\n")
+}
+
 # If a script has more blocks than the notebook has code cells, add cells
 # instead of losing the extra blocks.
 append_missing_code_cells <- function(notebook, required_code_cells) {
@@ -98,6 +104,53 @@ sync_notebook_code_cells <- function(notebook, blocks) {
     }
   }
 
+  notebook
+}
+
+# Rewrite a notebook so it has exactly the code cells we expect.
+# Regular notebooks keep extra markdown, but the Colab master is generated from
+# scripts. Dropping old extra code cells prevents stale workflow code from hiding
+# later in the notebook.
+sync_notebook_code_cells_exactly <- function(notebook, blocks) {
+  code_idx <- 1
+  synced_cells <- list()
+
+  for (i in seq_along(notebook$cells)) {
+    current_cell <- notebook$cells[[i]]
+
+    # Markdown cells are explanatory text, so keep them exactly as they are.
+    if (!isTRUE(current_cell$cell_type == "code")) {
+      synced_cells[[length(synced_cells) + 1]] <- current_cell
+      next
+    }
+
+    # If the old notebook has more code cells than the current script requires,
+    # skip the extras instead of copying stale code into the new notebook.
+    if (code_idx > length(blocks)) {
+      next
+    }
+
+    # Replace the old code cell with the matching current script block.
+    current_cell$execution_count <- NA
+    if (length(current_cell$metadata) == 0) {
+      current_cell$metadata <- empty_json_object()
+    }
+    current_cell$outputs <- list()
+    current_cell$source <- block_to_notebook_lines(blocks[[code_idx]])
+    synced_cells[[length(synced_cells) + 1]] <- current_cell
+    code_idx <- code_idx + 1
+  }
+
+  # If the current scripts grew, add new code cells at the end so no section is
+  # lost from the generated notebook.
+  while (code_idx <= length(blocks)) {
+    current_cell <- new_code_cell()
+    current_cell$source <- block_to_notebook_lines(blocks[[code_idx]])
+    synced_cells[[length(synced_cells) + 1]] <- current_cell
+    code_idx <- code_idx + 1
+  }
+
+  notebook$cells <- synced_cells
   notebook
 }
 
@@ -193,16 +246,24 @@ find_code_cell_by_text <- function(notebook, search_text) {
 
 update_colab_master_notebook <- function(notebook_path) {
   notebook <- fromJSON(notebook_path, simplifyVector = FALSE)
-  setup_cell_index <- find_code_cell_by_text(notebook, "# Setup Shared Project Files")
-  step_one_cell_index <- find_code_cell_by_text(notebook, "# TripAdvisor Sentiment Analysis - Step 1")
+  colab_blocks <- list(build_colab_setup_cell())
 
-  notebook$cells[[setup_cell_index]]$execution_count <- NA
-  notebook$cells[[setup_cell_index]]$outputs <- list()
-  notebook$cells[[setup_cell_index]]$source <- block_to_notebook_lines(build_colab_setup_cell())
+  # The master Colab notebook should contain every script section in order:
+  # setup first, then Step 1 through Step 5.
+  for (script_path in c(
+    "01_data_import.R",
+    "02_cleaning.R",
+    "03_sentiment_analysis.R",
+    "04_visualization.R",
+    "05_aspect_text_analysis.R"
+  )) {
+    colab_blocks <- c(colab_blocks, split_r_script(script_path))
+  }
 
-  notebook$cells[[step_one_cell_index]]$execution_count <- NA
-  notebook$cells[[step_one_cell_index]]$outputs <- list()
-  notebook$cells[[step_one_cell_index]]$source <- block_to_notebook_lines(split_r_script("01_data_import.R")[[1]])
+  # The master notebook has one code cell per script section. Rewrite those cells
+  # from the current scripts and drop any older extra code cells so stale code
+  # cannot remain in the Colab workflow.
+  notebook <- sync_notebook_code_cells_exactly(notebook, colab_blocks)
 
   # Some older notebook cells used {} for execution_count, which is not valid
   # Jupyter metadata. Reset all Colab code counts so the notebook opens cleanly.

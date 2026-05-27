@@ -744,6 +744,16 @@ class DataWiringTests(unittest.TestCase):
 
             self.assertLess(float(row["score_afinn"]), 0)
             self.assertLess(float(row["score_syuzhet"]), 0)
+            self.assertEqual(row["review_word_count"], "5")
+            self.assertEqual(row["median_review_word_count"], "5")
+            self.assertAlmostEqual(
+                float(row["score_afinn_per_median_review"]),
+                float(row["score_afinn"]),
+            )
+            self.assertAlmostEqual(
+                float(row["score_syuzhet_per_median_review"]),
+                float(row["score_syuzhet"]),
+            )
             self.assertEqual(row["sentiment_category"], "Negative")
         finally:
             shutil.rmtree(temp_dir)
@@ -1015,7 +1025,12 @@ class DataWiringTests(unittest.TestCase):
         temp_dir, project_copy = self.copy_project_for_workflow_test()
         r_code = """
         source("04_visualization.R")
-        required_columns <- c("score_afinn_raw", "review_word_count", "score_afinn_per_100_words")
+        required_columns <- c(
+          "score_afinn_raw",
+          "review_word_count",
+          "median_review_word_count",
+          "score_afinn_per_median_review"
+        )
         missing_columns <- setdiff(required_columns, names(trend_reviews))
         if (length(missing_columns) > 0) {
           stop(paste("Missing normalized trend columns:", paste(missing_columns, collapse = ", ")))
@@ -1024,7 +1039,7 @@ class DataWiringTests(unittest.TestCase):
         monthly_check <- trend_reviews %>%
           group_by(month_start) %>%
           summarise(
-            normalized_avg = mean(score_afinn_per_100_words, na.rm = TRUE),
+            normalized_avg = mean(score_afinn_per_median_review, na.rm = TRUE),
             raw_avg = mean(score_afinn_raw, na.rm = TRUE),
             .groups = "drop"
           ) %>%
@@ -1044,7 +1059,7 @@ class DataWiringTests(unittest.TestCase):
         if (length(actual) != 1 || !isTRUE(all.equal(actual, expected))) {
           stop(
             paste(
-              "Trend charts must average length-normalized AFINN scores.",
+              "Trend charts must average median-review-normalized AFINN scores.",
               "Expected", expected,
               "but got", paste(actual, collapse = ", ")
             )
@@ -1064,21 +1079,94 @@ class DataWiringTests(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
+    def test_sentiment_period_summary_uses_robust_median_monitoring(self):
+        temp_dir, project_copy = self.copy_project_for_workflow_test()
+        r_code = """
+        source("04_visualization.R")
+        required_columns <- c(
+          "period_type",
+          "period_start",
+          "period_label",
+          "review_count",
+          "median_review_word_count",
+          "mean_afinn_raw",
+          "median_afinn_raw",
+          "trimmed_mean_afinn_raw",
+          "mean_afinn_per_median_review",
+          "median_afinn_per_median_review",
+          "trimmed_mean_afinn_per_median_review",
+          "historical_median_afinn_per_median_review",
+          "historical_mad_afinn_per_median_review",
+          "robust_z_afinn_median",
+          "sentiment_drift_flag"
+        )
+        missing_columns <- setdiff(required_columns, names(sentiment_period_summary))
+        if (length(missing_columns) > 0) {
+          stop(paste("Missing period-monitoring columns:", paste(missing_columns, collapse = ", ")))
+        }
+
+        target_month <- sentiment_period_summary %>%
+          filter(period_type == "month", review_count > 0) %>%
+          slice_head(n = 1)
+        if (nrow(target_month) != 1) {
+          stop("The fixture needs at least one reviewed month.")
+        }
+
+        expected <- trend_reviews %>%
+          filter(month_start == target_month$period_start[[1]]) %>%
+          summarise(
+            mean_afinn_per_median_review = mean(score_afinn_per_median_review, na.rm = TRUE),
+            median_afinn_per_median_review = median(score_afinn_per_median_review, na.rm = TRUE),
+            trimmed_mean_afinn_per_median_review = calculate_trimmed_mean(score_afinn_per_median_review),
+            .groups = "drop"
+          )
+
+        actual_values <- target_month %>%
+          select(
+            mean_afinn_per_median_review,
+            median_afinn_per_median_review,
+            trimmed_mean_afinn_per_median_review
+          )
+
+        if (!isTRUE(all.equal(actual_values, expected, tolerance = 1e-6))) {
+          stop("Period summary must use mean, median, and trimmed mean on median-review-normalized AFINN.")
+        }
+
+        if (!file.exists(sentiment_period_summary_path)) {
+          stop("The period summary CSV was not written.")
+        }
+        if (!file.exists(sentiment_drift_monitor_path)) {
+          stop("The robust drift monitor chart was not written.")
+        }
+        """
+        try:
+            result = subprocess.run(
+                ["Rscript", "-e", r_code],
+                cwd=project_copy,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=120,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finally:
+            shutil.rmtree(temp_dir)
+
     def test_aspect_text_alignment_uses_length_normalized_afinn_scores(self):
         temp_dir, project_copy = self.copy_project_for_workflow_test()
         r_code = """
         source("05_aspect_text_analysis.R")
-        required_columns <- c("score_afinn_raw", "score_afinn_per_100_words")
+        required_columns <- c("score_afinn_raw", "score_afinn_per_median_review")
         missing_columns <- setdiff(required_columns, names(aspect_reviews))
         if (length(missing_columns) > 0) {
           stop(paste("Missing normalized aspect columns:", paste(missing_columns, collapse = ", ")))
         }
 
         aspect_check <- aspect_reviews %>%
-          filter(!is.na(aspect_rating), !is.na(score_afinn_per_100_words), !is.na(score_afinn_raw)) %>%
+          filter(!is.na(aspect_rating), !is.na(score_afinn_per_median_review), !is.na(score_afinn_raw)) %>%
           group_by(aspect_key) %>%
           summarise(
-            normalized_avg = mean(score_afinn_per_100_words, na.rm = TRUE),
+            normalized_avg = mean(score_afinn_per_median_review, na.rm = TRUE),
             raw_avg = mean(score_afinn_raw, na.rm = TRUE),
             .groups = "drop"
           ) %>%
@@ -1125,17 +1213,17 @@ class DataWiringTests(unittest.TestCase):
         temp_dir, project_copy = self.copy_project_for_workflow_test()
         r_code = """
         source("05_aspect_text_analysis.R")
-        required_columns <- c("score_syuzhet_raw", "score_syuzhet_per_100_words")
+        required_columns <- c("score_syuzhet_raw", "score_syuzhet_per_median_review")
         missing_columns <- setdiff(required_columns, names(aspect_reviews))
         if (length(missing_columns) > 0) {
           stop(paste("Missing normalized Syuzhet aspect columns:", paste(missing_columns, collapse = ", ")))
         }
 
         aspect_check <- aspect_reviews %>%
-          filter(!is.na(aspect_rating), !is.na(score_syuzhet_per_100_words), !is.na(score_syuzhet_raw)) %>%
+          filter(!is.na(aspect_rating), !is.na(score_syuzhet_per_median_review), !is.na(score_syuzhet_raw)) %>%
           group_by(aspect_key) %>%
           summarise(
-            normalized_avg = mean(score_syuzhet_per_100_words, na.rm = TRUE),
+            normalized_avg = mean(score_syuzhet_per_median_review, na.rm = TRUE),
             raw_avg = mean(score_syuzhet_raw, na.rm = TRUE),
             .groups = "drop"
           ) %>%
@@ -1226,17 +1314,17 @@ class DataWiringTests(unittest.TestCase):
         temp_dir, project_copy = self.copy_project_for_workflow_test()
         r_code = """
         source("04_visualization.R")
-        required_columns <- c("score_afinn_raw", "score_afinn_per_100_words")
+        required_columns <- c("score_afinn_raw", "score_afinn_per_median_review")
         missing_columns <- setdiff(required_columns, names(aspect_data))
         if (length(missing_columns) > 0) {
           stop(paste("Missing normalized visualization aspect columns:", paste(missing_columns, collapse = ", ")))
         }
         compared_rows <- aspect_data %>%
-          filter(!is.na(score_afinn_number), !is.na(score_afinn_per_100_words))
+          filter(!is.na(score_afinn_number), !is.na(score_afinn_per_median_review))
         if (nrow(compared_rows) == 0) {
           stop("The fixture needs at least one review with normalized AFINN.")
         }
-        if (!isTRUE(all.equal(compared_rows$score_afinn_number, compared_rows$score_afinn_per_100_words))) {
+        if (!isTRUE(all.equal(compared_rows$score_afinn_number, compared_rows$score_afinn_per_median_review))) {
           stop("Visualization aspect summaries must use length-normalized AFINN scores.")
         }
         """
@@ -1518,11 +1606,15 @@ class DataWiringTests(unittest.TestCase):
         self.assertIn("Yearly Sentiment Distribution", script)
         self.assertIn("sentiment_trend_monthly_heatmap.png", script)
         self.assertIn("sentiment_trend_monthly_rolling.png", script)
+        self.assertIn("sentiment_drift_monitor.png", script)
+        self.assertIn("sentiment_period_summary.csv", script)
         self.assertIn("sentiment_trend_quarterly.png", script)
         self.assertIn("sentiment_trend_yearly.png", script)
         self.assertIn("period_avg", script)
         self.assertIn("prior_avg", script)
         self.assertIn("rolling_avg_6", script)
+        self.assertIn("calculate_robust_z", script)
+        self.assertIn("period_trimmed_mean", script)
         self.assertIn("stats_label_y", script)
         self.assertIn("period_median", script)
         self.assertIn("period_q1", script)

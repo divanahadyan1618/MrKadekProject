@@ -187,6 +187,153 @@ score_negation_aware_sentiment <- function(text_vector, method = "afinn", negati
   vapply(text_vector, score_one_review, numeric(1))
 }
 
+# Count how many words are in each cleaned review.
+# Example: "great service and food" has 4 words.
+count_cleaned_words <- function(text_vector) {
+  if (is.null(text_vector) || length(text_vector) == 0) return(integer(0))
+
+  # Cleaned reviews use spaces between words. Counting non-empty chunks separated
+  # by spaces gives the review length used for sentiment normalization.
+  text_values <- as.character(text_vector)
+  text_values[is.na(text_values)] <- ""
+  text_values <- str_squish(text_values)
+
+  if_else(
+    text_values == "",
+    0L,
+    as.integer(str_count(text_values, "\\S+"))
+  )
+}
+
+# Rescale raw sentiment scores so reviews can be compared at the same length.
+# Example: if a 200-word review has an AFINN score of 20 and the target length
+# is 100 words, the normalized score is 10.
+normalize_score_to_word_count <- function(score_values, word_counts, target_word_count) {
+  # Raw lexicon scores are sums, so longer reviews can have larger totals just
+  # because they contain more words. This rescales each score to the same review
+  # length while preserving the original raw score in a separate column.
+  normalized_scores <- rep(NA_real_, length(score_values))
+  valid_rows <- !is.na(score_values) &
+    !is.na(word_counts) &
+    word_counts > 0 &
+    !is.na(target_word_count) &
+    target_word_count > 0
+
+  normalized_scores[valid_rows] <- score_values[valid_rows] / word_counts[valid_rows] * target_word_count
+  normalized_scores
+}
+
+# Calculate an average after removing the most extreme low and high values.
+# With trim = 0.1, R removes the lowest 10% and highest 10% before averaging.
+calculate_trimmed_mean <- function(values, trim = 0.1) {
+  # A trimmed mean drops the lowest and highest tails before averaging. It is
+  # useful when one unusual review should not control the period summary.
+  complete_values <- values[!is.na(values)]
+  if (length(complete_values) == 0) {
+    return(NA_real_)
+  }
+
+  mean(complete_values, trim = trim)
+}
+
+# Measure normal variation with MAD, a robust alternative to standard deviation.
+calculate_robust_mad <- function(values, minimum_count = 20) {
+  # MAD means median absolute deviation. It estimates normal variation around
+  # the median and is less sensitive to outliers than a standard deviation.
+  complete_values <- values[!is.na(values)]
+  if (length(complete_values) < minimum_count) {
+    return(NA_real_)
+  }
+
+  mad_value <- stats::mad(
+    complete_values,
+    center = stats::median(complete_values),
+    constant = 1.4826,
+    na.rm = TRUE
+  )
+
+  if (is.na(mad_value) || mad_value == 0) {
+    return(NA_real_)
+  }
+
+  mad_value
+}
+
+# Compare one current value with earlier historical values.
+# A result near 0 means "typical"; below -2 means "unusually low" by this rule.
+calculate_robust_z <- function(value, baseline_values, minimum_count = 20) {
+  # A robust z-score asks how far the current value is from the historical
+  # median, measured in MAD units. Negative values mean the current period is
+  # below the historical baseline.
+  baseline_values <- baseline_values[!is.na(baseline_values)]
+  mad_value <- calculate_robust_mad(baseline_values, minimum_count = minimum_count)
+
+  if (length(value) == 0 || is.na(value[[1]]) || is.na(mad_value)) {
+    return(NA_real_)
+  }
+
+  (value[[1]] - stats::median(baseline_values)) / mad_value
+}
+
+# Prepare raw and length-normalized sentiment columns in one consistent way.
+# Step 4 and Step 5 both call this helper so their charts and CSV files use the
+# same word-count denominator and cannot accidentally drift apart.
+prepare_length_normalized_sentiment <- function(data) {
+  required_columns <- c("cleaned_text", "score_syuzhet", "score_afinn")
+  missing_columns <- setdiff(required_columns, names(data))
+  if (length(missing_columns) > 0) {
+    stop(
+      paste("Missing columns needed for length-normalized sentiment:", paste(missing_columns, collapse = ", ")),
+      call. = FALSE
+    )
+  }
+
+  # Convert the raw score columns to numbers and create a word count if Step 3
+  # has not already saved one. Later scripts call this helper so every chart and
+  # table uses the same normalization rule.
+  normalized_data <- data %>%
+    mutate(
+      score_syuzhet_raw = readr::parse_number(as.character(score_syuzhet)),
+      score_afinn_raw = readr::parse_number(as.character(score_afinn)),
+      review_word_count = if ("review_word_count" %in% names(data)) {
+        readr::parse_number(as.character(review_word_count))
+      } else {
+        count_cleaned_words(cleaned_text)
+      }
+    )
+
+  if ("median_review_word_count" %in% names(normalized_data)) {
+    # If Step 3 already saved the median review length, reuse it. That keeps
+    # later scripts aligned with the scored CSV.
+    possible_target <- readr::parse_number(as.character(normalized_data$median_review_word_count))
+    target_word_count <- stats::median(possible_target[possible_target > 0], na.rm = TRUE)
+  } else {
+    # If a small test fixture skipped Step 3, calculate the median length here.
+    target_word_count <- stats::median(normalized_data$review_word_count[normalized_data$review_word_count > 0], na.rm = TRUE)
+  }
+
+  if (is.na(target_word_count)) {
+    stop("No cleaned words were found, so sentiment scores cannot be length-normalized.", call. = FALSE)
+  }
+
+  normalized_data %>%
+    mutate(
+      median_review_word_count = target_word_count,
+      # These two columns answer: what would the score look like if every review
+      # were the same length as the typical review in this dataset?
+      score_syuzhet_per_median_review = normalize_score_to_word_count(
+        score_syuzhet_raw,
+        review_word_count,
+        target_word_count
+      ),
+      score_afinn_per_median_review = normalize_score_to_word_count(
+        score_afinn_raw,
+        review_word_count,
+        target_word_count
+      )
+    )
+}
+
 #' Standardize Raw Hotel Review Columns
 #'
 #' Review exports often use source-specific column names such as `text`,

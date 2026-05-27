@@ -67,8 +67,9 @@ Convert numbers and scores into high-impact visuals:
 * **Aspect Rating Diagnostics**: Compare value, rooms, location, cleanliness, service, and sleep quality using average ratings, low-score shares, and yearly heatmaps.
 * **Emotion Breakdown**: Compare emotion categories such as joy, trust, anger, fear, and sadness.
 * **Sentiment Word Cloud**: Instantly spot the most repeated AFINN-scored sentiment words. Neutral topic words are intentionally excluded, so the cloud focuses on words such as "beautiful", "friendly", "excellent", or "bad".
-* **Monthly Sentiment Heatmap**: Read the calendar pattern quickly. Each tile is one month in one year, colored by average AFINN sentiment per 100 cleaned words and labeled with the number of reviews.
+* **Monthly Sentiment Heatmap**: Read the calendar pattern quickly. Each tile is one month in one year, colored by average AFINN sentiment scaled to the dataset's median review length and labeled with the number of reviews.
 * **Monthly Rolling Trend**: Follow the sentiment trend over time. The blue line smooths length-normalized monthly sentiment using a 6-month rolling average, and the dotted line compares each month to the average of all earlier reviews.
+* **Monthly Drift Monitor**: Compare each month's median sentiment with earlier reviews using a robust historical median and MAD check.
 * **Quarterly Boxplot**: Summarize review sentiment spread for each quarter. This is less noisy than monthly boxplots because each quarter usually has more reviews.
 * **Yearly Boxplot with Statistics**: Summarize each year's sentiment distribution with `n`, average, median, quartiles, minimum, maximum, and outlier count printed below the chart.
 

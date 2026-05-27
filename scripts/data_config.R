@@ -20,3 +20,7 @@ sentiment_scores_path <- file.path("data", "cleaned", "hotel_sentiment_scores.cs
 # Output folders for charts and CSV summary reports.
 figures_dir <- file.path("output", "figures")
 reports_dir <- file.path("output", "reports")
+
+# Summary outputs created by the trend-monitoring part of Step 4.
+sentiment_period_summary_path <- file.path(reports_dir, "sentiment_period_summary.csv")
+sentiment_drift_monitor_path <- file.path(figures_dir, "sentiment_drift_monitor.png")

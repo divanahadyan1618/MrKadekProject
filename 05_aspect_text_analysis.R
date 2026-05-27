@@ -22,6 +22,7 @@ library(syuzhet)
 # This file stores the folder and file names used throughout the project.
 # Using shared paths keeps every script pointed at the same inputs and outputs.
 source("scripts/data_config.R")
+source("scripts/helpers.R")
 
 # Step 5 depends on the scored review table from Step 3 and the token table
 # from Step 2. Before doing any analysis, we check that both files exist so
@@ -207,7 +208,10 @@ aspect_colors <- c(
 # For this analysis, it is easier to reshape the data into one row per
 # review-aspect pair. A single review can therefore become up to six rows:
 # one for Value, one for Rooms, one for Location, and so on.
+# Start with one row per review. The helper adds raw and normalized sentiment
+# columns before we reshape the table into one row per review-aspect pair.
 aspect_reviews <- research_data %>%
+  prepare_length_normalized_sentiment() %>%
   mutate(
     # Force IDs and numeric fields into predictable types. This prevents joins
     # from failing if one file reads review_id as text and another reads it as
@@ -216,22 +220,10 @@ aspect_reviews <- research_data %>%
     overall_rating = readr::parse_number(as.character(rating)),
     # AFINN and Syuzhet are summed scores, so long reviews can look more
     # emotional simply because they contain more words. We keep raw scores for
-    # traceability, then use per-100-word scores for aspect comparisons.
-    score_afinn_raw = readr::parse_number(as.character(score_afinn)),
-    score_syuzhet_raw = readr::parse_number(as.character(score_syuzhet)),
-    review_word_count = str_count(coalesce(cleaned_text, ""), "\\S+"),
-    score_afinn_per_100_words = if_else(
-      review_word_count > 0,
-      score_afinn_raw / review_word_count * 100,
-      NA_real_
-    ),
-    score_syuzhet_per_100_words = if_else(
-      review_word_count > 0,
-      score_syuzhet_raw / review_word_count * 100,
-      NA_real_
-    ),
-    score_afinn_number = score_afinn_per_100_words,
-    score_syuzhet_number = score_syuzhet_per_100_words,
+    # traceability, then use scores scaled to the median review length for aspect
+    # comparisons. This keeps a short review and a long review on the same scale.
+    score_afinn_number = score_afinn_per_median_review,
+    score_syuzhet_number = score_syuzhet_per_median_review,
     across(all_of(available_aspect_columns), ~ readr::parse_number(as.character(.x)))
   ) %>%
   select(
@@ -243,13 +235,14 @@ aspect_reviews <- research_data %>%
     rating,
     overall_rating,
     score_afinn_raw,
-    score_afinn_per_100_words,
+    score_afinn_per_median_review,
     score_afinn_number,
     score_syuzhet_raw,
-    score_syuzhet_per_100_words,
+    score_syuzhet_per_median_review,
     score_syuzhet_number,
     sentiment_category,
     review_word_count,
+    median_review_word_count,
     anger,
     anticipation,
     disgust,
@@ -607,9 +600,9 @@ aspect_text_mismatches <- aspect_reviews %>%
     aspect = as.character(aspect_label),
     aspect_rating,
     overall_rating,
-    score_afinn_per_100_words = score_afinn_number,
+    score_afinn_per_median_review = score_afinn_number,
     score_afinn_raw,
-    score_syuzhet_per_100_words = score_syuzhet_number,
+    score_syuzhet_per_median_review = score_syuzhet_number,
     score_syuzhet_raw,
     sentiment_category,
     mismatch_types,
@@ -617,7 +610,7 @@ aspect_text_mismatches <- aspect_reviews %>%
     review_excerpt = make_review_excerpt(review_text),
     review_text
   ) %>%
-  arrange(aspect, aspect_rating, score_afinn_per_100_words, review_id)
+  arrange(aspect, aspect_rating, score_afinn_per_median_review, review_id)
 
 write_csv(
   aspect_text_mismatches,
@@ -641,9 +634,9 @@ aspect_qualitative_examples <- aspect_reviews %>%
     review_date,
     aspect_rating,
     overall_rating,
-    score_afinn_per_100_words = score_afinn_number,
+    score_afinn_per_median_review = score_afinn_number,
     score_afinn_raw,
-    score_syuzhet_per_100_words = score_syuzhet_number,
+    score_syuzhet_per_median_review = score_syuzhet_number,
     score_syuzhet_raw,
     sentiment_category,
     title,
@@ -676,9 +669,9 @@ if (nrow(aspect_sentiment_plot_data) > 0) {
     scale_fill_brewer(palette = "RdYlGn") +
     labs(
       title = "Text Sentiment by Structured Aspect Rating",
-      subtitle = "Boxes compare whole-review AFINN per 100 cleaned words for low and high aspect scores",
+      subtitle = "Boxes compare whole-review AFINN scaled to a median-length review for low and high aspect scores",
       x = "Aspect rating",
-      y = "AFINN per 100 cleaned words"
+      y = "AFINN per median-length review"
     ) +
     theme_premium() +
     theme(legend.position = "none")

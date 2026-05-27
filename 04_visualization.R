@@ -18,6 +18,7 @@ library(tidytext)     # For handling our text data.
 library(wordcloud)    # A fun tool specifically for drawing Word Clouds.
 library(RColorBrewer) # A tool that provides beautiful, professional color palettes.
 source("scripts/data_config.R")
+source("scripts/helpers.R")
 
 # We load the final, scored dataset from Step 3.
 if (!file.exists(sentiment_scores_path) || !file.exists(cleaned_tokens_path)) {
@@ -343,19 +344,14 @@ if (length(available_aspect_columns) > 0) {
   # Make sure the rating columns are numbers. parse_number() is forgiving: it
   # can read values such as "5", "5.0", or even "5 of 5" as the number 5.
   aspect_data <- research_data %>%
+    prepare_length_normalized_sentiment() %>%
     mutate(
       overall_rating = readr::parse_number(as.character(rating)),
       # Raw AFINN is a summed score. Longer reviews can therefore produce larger
       # scores even when the emotional density is similar. The aspect summaries
-      # use AFINN per 100 cleaned words so low/high aspect comparisons are fairer.
-      score_afinn_raw = readr::parse_number(as.character(score_afinn)),
-      review_word_count = str_count(coalesce(cleaned_text, ""), "\\S+"),
-      score_afinn_per_100_words = if_else(
-        review_word_count > 0,
-        score_afinn_raw / review_word_count * 100,
-        NA_real_
-      ),
-      score_afinn_number = score_afinn_per_100_words,
+      # use scores scaled to the median review length in this dataset so low/high
+      # aspect comparisons are fairer without choosing an arbitrary denominator.
+      score_afinn_number = score_afinn_per_median_review,
       date_parsed = parse_review_dates(review_date),
       year_label = as.character(lubridate::year(date_parsed)),
       across(all_of(available_aspect_columns), ~ readr::parse_number(as.character(.x)))
@@ -385,7 +381,9 @@ if (length(available_aspect_columns) > 0) {
         review_text,
         overall_rating,
         score_afinn_raw,
-        score_afinn_per_100_words,
+        review_word_count,
+        median_review_word_count,
+        score_afinn_per_median_review,
         score_afinn_number,
         all_of(available_aspect_columns)
       ) %>%
@@ -459,7 +457,7 @@ if (length(available_aspect_columns) > 0) {
       review_date = first(review_date),
       rating = first(overall_rating),
       low_aspects = paste(paste0(aspect_label, "=", aspect_rating), collapse = "; "),
-      score_afinn_per_100_words = first(score_afinn_number),
+      score_afinn_per_median_review = first(score_afinn_number),
       score_afinn_raw = first(score_afinn_raw),
       title = first(title),
       review_text = first(review_text),
@@ -715,18 +713,15 @@ if (nrow(sentiment_word_counts) == 0) {
 # 3. Quarterly boxplot: How much do reviews vary inside each quarter?
 # 4. Yearly boxplot: How much do reviews vary inside each year?
 trend_reviews <- research_data %>%
+  prepare_length_normalized_sentiment() %>%
   mutate(
     # The TripAdvisor export may use full dates or month-year labels.
     date_parsed = parse_review_dates(review_date),
     # score_afinn is a raw summed word score. For trend charts, normalize it
     # by review length so long reviews do not dominate month and year averages.
-    score_afinn_raw = readr::parse_number(as.character(score_afinn)),
-    review_word_count = str_count(coalesce(cleaned_text, ""), "\\S+"),
-    score_afinn_per_100_words = if_else(
-      review_word_count > 0,
-      score_afinn_raw / review_word_count * 100,
-      NA_real_
-    )
+    # The target length is the median cleaned review length for this dataset.
+    score_afinn = score_afinn_per_median_review,
+    rating_number = readr::parse_number(as.character(rating))
   )
 
 unparseable_review_dates <- trend_reviews %>%
@@ -750,11 +745,11 @@ trend_reviews <- trend_reviews %>%
     month_start = lubridate::floor_date(date_parsed, "month"),
     quarter_start = lubridate::floor_date(date_parsed, "quarter"),
     quarter_label = paste0(lubridate::year(date_parsed), " Q", lubridate::quarter(date_parsed)),
-    year_label = as.character(lubridate::year(date_parsed)),
-    score_afinn = score_afinn_per_100_words
+    year_start = lubridate::floor_date(date_parsed, "year"),
+    year_label = as.character(lubridate::year(date_parsed))
   ) %>%
   # Ignore broken dates and reviews that cannot be normalized.
-  filter(!is.na(date_parsed), !is.na(score_afinn_per_100_words))
+  filter(!is.na(date_parsed), !is.na(score_afinn_per_median_review))
 
 # Give every calendar month a simple number: 1, 2, 3, and so on.
 # Some months have no reviews. We still include those empty months so a
@@ -817,14 +812,20 @@ format_stat <- function(value) {
 reviewed_month_averages <- trend_reviews %>%
   group_by(month_start, month_index, month_label, quarter_start, quarter_label) %>%
   summarise(
-    period_avg = mean(score_afinn),
+    period_avg = mean(score_afinn, na.rm = TRUE),
+    period_median = median(score_afinn, na.rm = TRUE),
+    period_trimmed_mean = calculate_trimmed_mean(score_afinn),
+    period_q1 = quantile(score_afinn, 0.25, names = FALSE, na.rm = TRUE),
+    period_q3 = quantile(score_afinn, 0.75, names = FALSE, na.rm = TRUE),
+    period_min = min(score_afinn, na.rm = TRUE),
+    period_max = max(score_afinn, na.rm = TRUE),
     review_count = n(),
-    score_total = sum(score_afinn),
+    score_total = sum(score_afinn, na.rm = TRUE),
     .groups = "drop"
   )
 
 # Create one row per calendar month.
-# period_avg is the average sentiment score per 100 cleaned words for that month.
+# period_avg is the average sentiment score scaled to a median-length review.
 # review_count tells us how many reviews were written in that month.
 # score_total is used for rolling averages and prior averages.
 month_averages <- month_lookup %>%
@@ -888,9 +889,15 @@ quarter_bands <- month_lookup %>%
 quarter_averages <- trend_reviews %>%
   group_by(quarter_start, quarter_label) %>%
   summarise(
-    period_avg = mean(score_afinn),
+    period_avg = mean(score_afinn, na.rm = TRUE),
+    period_median = median(score_afinn, na.rm = TRUE),
+    period_trimmed_mean = calculate_trimmed_mean(score_afinn),
+    period_q1 = quantile(score_afinn, 0.25, names = FALSE, na.rm = TRUE),
+    period_q3 = quantile(score_afinn, 0.75, names = FALSE, na.rm = TRUE),
+    period_min = min(score_afinn, na.rm = TRUE),
+    period_max = max(score_afinn, na.rm = TRUE),
     review_count = n(),
-    score_total = sum(score_afinn),
+    score_total = sum(score_afinn, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   arrange(quarter_start) %>%
@@ -907,15 +914,16 @@ year_averages <- trend_reviews %>%
     # Store all yearly scores temporarily so we can count outliers after
     # calculating the boxplot fences.
     scores = list(score_afinn),
-    period_avg = mean(score_afinn),
-    period_median = median(score_afinn),
-    period_q1 = quantile(score_afinn, 0.25, names = FALSE),
-    period_q3 = quantile(score_afinn, 0.75, names = FALSE),
-    period_min = min(score_afinn),
-    period_max = max(score_afinn),
+    period_avg = mean(score_afinn, na.rm = TRUE),
+    period_median = median(score_afinn, na.rm = TRUE),
+    period_trimmed_mean = calculate_trimmed_mean(score_afinn),
+    period_q1 = quantile(score_afinn, 0.25, names = FALSE, na.rm = TRUE),
+    period_q3 = quantile(score_afinn, 0.75, names = FALSE, na.rm = TRUE),
+    period_min = min(score_afinn, na.rm = TRUE),
+    period_max = max(score_afinn, na.rm = TRUE),
     iqr = IQR(score_afinn),
     review_count = n(),
-    score_total = sum(score_afinn),
+    score_total = sum(score_afinn, na.rm = TRUE),
     .groups = "drop"
   ) %>%
   arrange(year_label) %>%
@@ -938,6 +946,7 @@ year_averages <- trend_reviews %>%
       "n=", review_count,
       "\navg=", format_stat(period_avg),
       "\nmedian=", format_stat(period_median),
+      "\ntrimmed=", format_stat(period_trimmed_mean),
       "\nq1=", format_stat(period_q1),
       "\nq3=", format_stat(period_q3),
       "\nmin=", format_stat(period_min),
@@ -945,6 +954,111 @@ year_averages <- trend_reviews %>%
       "\nn_outliers=", n_outliers
     )
   )
+
+# Build a CSV table that shows how each period compares with the hotel's past.
+# This is not a management action rule. It is a statistical monitoring output:
+# negative robust z-scores mean the current period is below the historical median.
+# Require at least 3 reviews in the current period and at least 20 older reviews
+# before raising a statistical flag. This avoids overreacting to tiny samples.
+minimum_current_reviews_for_drift <- 3
+minimum_baseline_reviews_for_drift <- 20
+
+build_sentiment_period_summary <- function(data, period_type_value, period_start_col, period_label_col) {
+  # The same function works for months, quarters, and years. The period_start_col
+  # and period_label_col arguments tell R which date columns to group by.
+  period_rows <- data %>%
+    group_by(
+      period_start = .data[[period_start_col]],
+      period_label = .data[[period_label_col]]
+    ) %>%
+    # One summary row is created for each time period. We keep raw sentiment
+    # scores for auditability and normalized scores for fair period comparisons.
+    summarise(
+      period_type = period_type_value,
+      review_count = n(),
+      median_review_word_count = first(median_review_word_count),
+      mean_afinn_raw = mean(score_afinn_raw, na.rm = TRUE),
+      median_afinn_raw = median(score_afinn_raw, na.rm = TRUE),
+      trimmed_mean_afinn_raw = calculate_trimmed_mean(score_afinn_raw),
+      mean_afinn_per_median_review = mean(score_afinn_per_median_review, na.rm = TRUE),
+      median_afinn_per_median_review = median(score_afinn_per_median_review, na.rm = TRUE),
+      trimmed_mean_afinn_per_median_review = calculate_trimmed_mean(score_afinn_per_median_review),
+      mean_syuzhet_raw = mean(score_syuzhet_raw, na.rm = TRUE),
+      median_syuzhet_raw = median(score_syuzhet_raw, na.rm = TRUE),
+      trimmed_mean_syuzhet_raw = calculate_trimmed_mean(score_syuzhet_raw),
+      mean_syuzhet_per_median_review = mean(score_syuzhet_per_median_review, na.rm = TRUE),
+      median_syuzhet_per_median_review = median(score_syuzhet_per_median_review, na.rm = TRUE),
+      trimmed_mean_syuzhet_per_median_review = calculate_trimmed_mean(score_syuzhet_per_median_review),
+      mean_rating = mean(rating_number, na.rm = TRUE),
+      median_rating = median(rating_number, na.rm = TRUE),
+      trimmed_mean_rating = calculate_trimmed_mean(rating_number),
+      low_rating_share = mean(rating_number <= 3, na.rm = TRUE),
+      negative_text_share = mean(score_afinn_per_median_review < 0, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    arrange(period_start)
+
+  period_rows %>%
+    # rowwise() means the calculations below happen one period at a time.
+    # That is important because every period has a different historical baseline.
+    rowwise() %>%
+    mutate(
+      # The baseline contains only reviews before the current period. This prevents
+      # future reviews from influencing a past period's warning score.
+      baseline_review_count = sum(data$date_parsed < period_start & !is.na(data$score_afinn_per_median_review)),
+      historical_median_afinn_per_median_review = if_else(
+        baseline_review_count >= minimum_baseline_reviews_for_drift,
+        median(data$score_afinn_per_median_review[data$date_parsed < period_start], na.rm = TRUE),
+        NA_real_
+      ),
+      historical_mad_afinn_per_median_review = calculate_robust_mad(
+        data$score_afinn_per_median_review[data$date_parsed < period_start],
+        minimum_count = minimum_baseline_reviews_for_drift
+      ),
+      robust_z_afinn_median = calculate_robust_z(
+        median_afinn_per_median_review,
+        data$score_afinn_per_median_review[data$date_parsed < period_start],
+        minimum_count = minimum_baseline_reviews_for_drift
+      ),
+      # Rating drift uses the same prior-history idea as sentiment drift, but it
+      # looks at TripAdvisor star ratings instead of text sentiment.
+      historical_median_rating = if_else(
+        baseline_review_count >= minimum_baseline_reviews_for_drift,
+        median(data$rating_number[data$date_parsed < period_start], na.rm = TRUE),
+        NA_real_
+      ),
+      historical_mad_rating = calculate_robust_mad(
+        data$rating_number[data$date_parsed < period_start],
+        minimum_count = minimum_baseline_reviews_for_drift
+      ),
+      robust_z_rating_median = calculate_robust_z(
+        median_rating,
+        data$rating_number[data$date_parsed < period_start],
+        minimum_count = minimum_baseline_reviews_for_drift
+      ),
+      # A TRUE flag means "this period deserves closer inspection." It does not
+      # mean the project has proven a management or investment decision.
+      sentiment_drift_flag = review_count >= minimum_current_reviews_for_drift &
+        baseline_review_count >= minimum_baseline_reviews_for_drift &
+        !is.na(robust_z_afinn_median) &
+        robust_z_afinn_median <= -2,
+      rating_drift_flag = review_count >= minimum_current_reviews_for_drift &
+        baseline_review_count >= minimum_baseline_reviews_for_drift &
+        !is.na(robust_z_rating_median) &
+        robust_z_rating_median <= -2,
+      any_drift_flag = sentiment_drift_flag | rating_drift_flag
+    ) %>%
+    ungroup()
+}
+
+sentiment_period_summary <- bind_rows(
+  build_sentiment_period_summary(trend_reviews, "month", "month_start", "month_label"),
+  build_sentiment_period_summary(trend_reviews, "quarter", "quarter_start", "quarter_label"),
+  build_sentiment_period_summary(trend_reviews, "year", "year_start", "year_label")
+)
+
+# Save output/reports/sentiment_period_summary.csv for review and later writing.
+write_csv(sentiment_period_summary, sentiment_period_summary_path)
 
 # Add quarter_index and year_index back onto the review-level data.
 # The boxplots use these simple numbers for clean x-axis positioning.
@@ -979,11 +1093,11 @@ p4_heatmap <- ggplot(month_averages, aes(x = month_name, y = year_label, fill = 
     mid = "#F7F9F9",
     high = "#16A085",
     midpoint = 0,
-    name = "Average\nAFINN/100 words",
+    name = "Average\nAFINN per\nmedian-length review",
     na.value = "#F4F6F7"
   ) +
   labs(
-    title = "Monthly Sentiment Heatmap (AFINN per 100 Cleaned Words)",
+    title = "Monthly Sentiment Heatmap (AFINN per Median-Length Review)",
     subtitle = "Each tile shows monthly average length-normalized sentiment and review count",
     x = "Month",
     y = "Year"
@@ -1050,10 +1164,10 @@ p4_rolling <- ggplot() +
   scale_size_continuous(range = c(1.4, 5)) +
   scale_x_continuous(breaks = month_breaks, labels = month_labels) +
   labs(
-    title = "Monthly Sentiment Trend with Rolling Average (AFINN per 100 Cleaned Words)",
+    title = "Monthly Sentiment Trend with Rolling Average (AFINN per Median-Length Review)",
     subtitle = "Points show monthly averages sized by review count; blue line is the 6-month rolling average; dotted line is prior average",
     x = "Timeline (Month/Year)",
-    y = "AFINN per 100 cleaned words"
+    y = "AFINN per median-length review"
   ) +
   theme_premium() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -1061,8 +1175,48 @@ p4_rolling <- ggplot() +
 # Show the chart in RStudio, but do not open a PDF device during Rscript runs.
 show_plot_for_interactive_use(p4_rolling)
 
-ggsave(file.path(figures_dir, "sentiment_trend.png"), plot = p4_rolling, width = 10, height = 5.5, dpi = 300)
 ggsave(file.path(figures_dir, "sentiment_trend_monthly_rolling.png"), plot = p4_rolling, width = 10, height = 5.5, dpi = 300)
+
+# Monthly robust drift monitor. This chart saves output/figures/sentiment_drift_monitor.png.
+# It views each month's median sentiment
+# against only the reviews that came before that month. A value near 0 means the
+# month looks typical. A value below -2 means it is unusually low by a robust
+# median-and-MAD rule, if there are enough current and historical reviews.
+monthly_drift_monitor <- sentiment_period_summary %>%
+  filter(period_type == "month", !is.na(robust_z_afinn_median))
+
+if (nrow(monthly_drift_monitor) > 0) {
+  p4_drift <- ggplot(
+    monthly_drift_monitor,
+    aes(x = period_start, y = robust_z_afinn_median)
+  ) +
+    geom_hline(yintercept = 0, color = "#7F8C8D", linewidth = 0.45) +
+    geom_hline(yintercept = -2, color = "#C0392B", linetype = "dashed", linewidth = 0.8) +
+    geom_col(aes(fill = any_drift_flag), width = 24, alpha = 0.76) +
+    geom_point(aes(size = review_count), color = "#2C3E50", alpha = 0.82) +
+    scale_fill_manual(values = c("FALSE" = "#7FB3D5", "TRUE" = "#C0392B")) +
+    scale_size_continuous(range = c(1.8, 5.2)) +
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+    labs(
+      title = "Monthly Sentiment Drift Monitor",
+      subtitle = "Monthly median AFINN compared with prior reviews using historical median and MAD",
+      x = "Review month",
+      y = "Robust z-score"
+    ) +
+    theme_premium() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+  show_plot_for_interactive_use(p4_drift)
+  ggsave(sentiment_drift_monitor_path, plot = p4_drift, width = 10, height = 5.5, dpi = 300)
+} else {
+  save_placeholder_plot(
+    basename(sentiment_drift_monitor_path),
+    "Monthly Sentiment Drift Monitor",
+    "There are not enough historical reviews to calculate robust drift scores yet.",
+    width = 10,
+    height = 5.5
+  )
+}
 
 # Quarterly boxplot for quarter-level statistics.
 # A quarterly boxplot groups all reviews from the same quarter together.
@@ -1099,10 +1253,10 @@ p5 <- ggplot(trend_reviews, aes(x = quarter_index, y = score_afinn, group = quar
   scale_x_continuous(breaks = quarter_breaks, labels = quarter_labels) +
   scale_y_continuous(limits = c(stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
   labs(
-    title = "Quarterly Sentiment Distribution (AFINN per 100 Cleaned Words)",
+    title = "Quarterly Sentiment Distribution (AFINN per Median-Length Review)",
     subtitle = "Each box summarizes one quarter; labels show quarter avg and n; dotted line shows the average before each quarter",
     x = "Quarter",
-    y = "AFINN per 100 cleaned words"
+    y = "AFINN per median-length review"
   ) +
   theme_premium() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
@@ -1151,10 +1305,10 @@ p6 <- ggplot(trend_reviews, aes(x = year_index, y = score_afinn, group = year_in
   scale_x_continuous(breaks = year_averages$year_index, labels = year_averages$year_label) +
   scale_y_continuous(limits = c(year_stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
   labs(
-    title = "Yearly Sentiment Distribution (AFINN per 100 Cleaned Words)",
+    title = "Yearly Sentiment Distribution (AFINN per Median-Length Review)",
     subtitle = "Each box summarizes one year; labels show n, mean, median, quartiles, min, max, and outliers",
     x = "Year",
-    y = "AFINN per 100 cleaned words"
+    y = "AFINN per median-length review"
   ) +
   theme_premium() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
