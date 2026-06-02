@@ -176,6 +176,10 @@ The annual profile shows that the dataset is not evenly distributed across time.
 
 The reviewer-location profile indicates broad international reach, with Singapore, Jakarta, Sydney, Hong Kong, London, and other major travel markets appearing repeatedly in the table. However, 178 reviews have missing reviewer location, and recent years contain a particularly high share of `Unknown` locations. Therefore, reviewer geography should be treated as contextual evidence about the visible reviewer base, not as a representative market-origin distribution.
 
+The regional sentiment chart adds a second geographic view. It summarizes the median length-normalized AFINN sentiment score for each reviewer region with at least five reviews, excluding `Unknown` locations. Median sentiment is preferable to mean sentiment here because reviewer regions have uneven review counts and individual reviews can be unusually positive or negative. The chart is therefore useful for classroom comparison of visible reviewer-location groups, but it should not be interpreted as a representative market-origin ranking.
+
+![Figure 1b. Median length-normalized sentiment score by reviewer region.](../figures/sentiment_by_region_bar_chart.png)
+
 ### 5.6 Structured Aspect Rating Availability
 
 The dataset also includes structured aspect ratings for value, rooms, location, cleanliness, service, and sleep quality. These fields are not merely supplementary metadata. They provide a middle layer between the overall star rating and the open-ended review text. Overall ratings indicate broad satisfaction, while aspect ratings show which part of the guest experience may be driving satisfaction or dissatisfaction.
@@ -562,6 +566,7 @@ The project generates several visual outputs, each with a methodological purpose
 |---|---|
 | Sentiment distribution | Shows overall positive, neutral, and negative classification balance. |
 | Rating-sentiment boxplot | Compares textual sentiment with star ratings and identifies divergence. |
+| Regional sentiment bar chart | Compares median length-normalized sentiment across reviewer regions with enough visible reviews. |
 | Aspect mean ratings | Compares structured value, rooms, location, cleanliness, service, and sleep-quality ratings. |
 | Aspect low-score share | Identifies dimensions where 1-3 star aspect ratings are concentrated. |
 | Yearly aspect-rating heatmap | Shows whether structured aspect ratings change across years while displaying available rating counts. |

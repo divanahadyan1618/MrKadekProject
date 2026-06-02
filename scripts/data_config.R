@@ -23,5 +23,8 @@ reports_dir <- file.path("output", "reports")
 
 # Summary outputs created by the trend-monitoring part of Step 4.
 annual_review_profile_path <- file.path(reports_dir, "annual_review_profile.csv")
+sentiment_by_region_summary_path <- file.path(reports_dir, "sentiment_by_region_summary.csv")
+sentiment_by_region_plot_path <- file.path(figures_dir, "sentiment_by_region_bar_chart.png")
+sentiment_by_region_plot_id_path <- file.path(figures_dir, "sentiment_by_region_bar_chart_id.png")
 sentiment_period_summary_path <- file.path(reports_dir, "sentiment_period_summary.csv")
 sentiment_drift_monitor_path <- file.path(figures_dir, "sentiment_drift_monitor.png")

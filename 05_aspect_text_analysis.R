@@ -914,6 +914,274 @@ if (nrow(mismatch_counts) > 0) {
   )
 }
 
+# =====================================================================
+# STEP 8: Save Indonesian Versions of Aspect-Text Figures
+# =====================================================================
+# The Indonesian paper uses localized chart labels. The actual words and
+# phrases from reviews remain unchanged because they are evidence from the
+# corpus, not interface text.
+aspect_label_id_lookup <- c(
+  "Value" = "Nilai",
+  "Rooms" = "Kamar",
+  "Location" = "Lokasi",
+  "Cleanliness" = "Kebersihan",
+  "Service" = "Layanan",
+  "Sleep quality" = "Kualitas tidur"
+)
+aspect_label_id_levels <- unname(aspect_label_id_lookup)
+sentiment_tone_labels_id <- c(
+  "negative" = "Negatif",
+  "neutral" = "Netral",
+  "positive" = "Positif"
+)
+
+aspect_sentiment_plot_data_id <- aspect_sentiment_plot_data %>%
+  mutate(
+    aspect_label_id = recode(as.character(aspect_label), !!!aspect_label_id_lookup),
+    aspect_label_id = factor(aspect_label_id, levels = aspect_label_id_levels)
+  )
+
+if (nrow(aspect_sentiment_plot_data_id) > 0) {
+  p_aspect_sentiment_id <- ggplot(
+    aspect_sentiment_plot_data_id,
+    aes(x = aspect_rating_group, y = score_afinn_number, fill = aspect_rating_group)
+  ) +
+    geom_hline(yintercept = 0, color = "#7F8C8D", linewidth = 0.4, linetype = "dashed") +
+    geom_boxplot(alpha = 0.82, outlier.alpha = 0.25, width = 0.62) +
+    facet_wrap(~ aspect_label_id, ncol = 3) +
+    scale_fill_brewer(palette = "RdYlGn") +
+    labs(
+      title = "Sentimen Teks menurut Rating Aspek Terstruktur",
+      subtitle = "Diagram kotak membandingkan AFINN seluruh ulasan yang diskalakan ke panjang median ulasan untuk skor aspek rendah dan tinggi",
+      x = "Rating aspek",
+      y = "AFINN ternormalisasi"
+    ) +
+    theme_premium() +
+    theme(legend.position = "none")
+
+  ggsave(
+    file.path(figures_dir, "aspect_sentiment_by_rating_boxplot_id.png"),
+    plot = p_aspect_sentiment_id,
+    width = 11,
+    height = 7,
+    dpi = 300
+  )
+} else {
+  save_placeholder_plot(
+    "aspect_sentiment_by_rating_boxplot_id.png",
+    "Sentimen Teks menurut Rating Aspek Terstruktur",
+    "Tidak ada pasangan rating aspek dan sentimen teks yang lengkap dalam sampel ini.",
+    width = 11,
+    height = 7
+  )
+}
+
+plot_key_terms_id <- plot_key_terms %>%
+  mutate(
+    aspect_label_id = recode(as.character(aspect_label), !!!aspect_label_id_lookup),
+    aspect_label_id = factor(aspect_label_id, levels = aspect_label_id_levels),
+    term_for_plot_id = tidytext::reorder_within(term, log_lift_low_vs_high, aspect_label_id),
+    label_text = paste0("rendah n=", count_low)
+  )
+
+if (nrow(plot_key_terms_id) > 0) {
+  p_low_terms_id <- ggplot(
+    plot_key_terms_id,
+    aes(x = term_for_plot_id, y = log_lift_low_vs_high, fill = term_sentiment)
+  ) +
+    geom_col(width = 0.72, alpha = 0.88) +
+    geom_text(aes(label = label_text), hjust = -0.08, size = 2.5, color = "#2C3E50") +
+    coord_flip() +
+    facet_wrap(~ aspect_label_id, scales = "free_y", ncol = 2) +
+    tidytext::scale_x_reordered() +
+    scale_fill_manual(
+      values = c("negative" = "#E76F51", "neutral" = "#457B9D", "positive" = "#2A9D8F"),
+      labels = sentiment_tone_labels_id,
+      name = "Nada kata AFINN"
+    ) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.28))) +
+    labs(
+      title = "Kata yang Paling Berasosiasi dengan Skor Aspek Rendah",
+      subtitle = "Batang menunjukkan log lift yang diperhalus dalam ulasan skor rendah dibanding ulasan skor tinggi",
+      x = "Kata",
+      y = "Asosiasi skor rendah"
+    ) +
+    theme_premium()
+
+  ggsave(
+    file.path(figures_dir, "aspect_low_score_key_terms_id.png"),
+    plot = p_low_terms_id,
+    width = 11,
+    height = 8,
+    dpi = 300
+  )
+} else {
+  save_placeholder_plot(
+    "aspect_low_score_key_terms_id.png",
+    "Kata yang Paling Berasosiasi dengan Skor Aspek Rendah",
+    "Sampel ini tidak memiliki cukup teks ulasan skor rendah untuk memeringkat kata.",
+    width = 11,
+    height = 8
+  )
+}
+
+plot_key_phrases_id <- plot_key_phrases %>%
+  mutate(
+    aspect_label_id = recode(as.character(aspect_label), !!!aspect_label_id_lookup),
+    aspect_label_id = factor(aspect_label_id, levels = aspect_label_id_levels),
+    term_for_plot_id = tidytext::reorder_within(term, log_lift_low_vs_high, aspect_label_id),
+    label_text = paste0("rendah n=", count_low)
+  )
+
+if (nrow(plot_key_phrases_id) > 0) {
+  p_low_phrases_id <- ggplot(
+    plot_key_phrases_id,
+    aes(x = term_for_plot_id, y = log_lift_low_vs_high, fill = term_sentiment)
+  ) +
+    geom_col(width = 0.72, alpha = 0.88) +
+    geom_text(aes(label = label_text), hjust = -0.08, size = 2.4, color = "#2C3E50") +
+    coord_flip() +
+    facet_wrap(~ aspect_label_id, scales = "free_y", ncol = 2) +
+    tidytext::scale_x_reordered() +
+    scale_fill_manual(
+      values = c("negative" = "#E76F51", "neutral" = "#457B9D", "positive" = "#2A9D8F"),
+      labels = sentiment_tone_labels_id,
+      name = "Nada frasa AFINN"
+    ) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.34))) +
+    labs(
+      title = "Frasa yang Paling Berasosiasi dengan Skor Aspek Rendah",
+      subtitle = "Batang menunjukkan log lift yang diperhalus dalam ulasan skor rendah dibanding ulasan skor tinggi",
+      x = "Frasa",
+      y = "Asosiasi skor rendah"
+    ) +
+    theme_premium()
+
+  ggsave(
+    file.path(figures_dir, "aspect_low_score_key_phrases_id.png"),
+    plot = p_low_phrases_id,
+    width = 11,
+    height = 8,
+    dpi = 300
+  )
+} else {
+  save_placeholder_plot(
+    "aspect_low_score_key_phrases_id.png",
+    "Frasa yang Paling Berasosiasi dengan Skor Aspek Rendah",
+    "Sampel ini tidak memiliki cukup teks ulasan skor rendah untuk memeringkat frasa.",
+    width = 11,
+    height = 8
+  )
+}
+
+negative_heatmap_terms_id <- negative_heatmap_terms %>%
+  mutate(
+    aspect_label_id = recode(as.character(aspect_label), !!!aspect_label_id_lookup),
+    aspect_label_id = factor(aspect_label_id, levels = aspect_label_id_levels)
+  )
+
+if (nrow(negative_heatmap_terms_id) > 0) {
+  p_negative_heatmap_id <- negative_heatmap_terms_id %>%
+    mutate(
+      term = fct_reorder(term, log_lift_low_vs_high, .fun = max),
+      heatmap_label = paste0("n=", count_low)
+    ) %>%
+    ggplot(aes(x = aspect_label_id, y = term, fill = log_lift_low_vs_high)) +
+    geom_tile(color = "white", linewidth = 0.45) +
+    geom_text(aes(label = heatmap_label), size = 2.7, color = "#2C3E50") +
+    scale_fill_gradient(
+      low = "#F7F9F9",
+      high = "#C0392B",
+      name = "Log lift\nskor rendah"
+    ) +
+    labs(
+      title = "Kata Negatif yang Berasosiasi dengan Skor Aspek Rendah",
+      subtitle = "Setiap sel menunjukkan kata negatif AFINN yang muncul secara tidak biasa dalam ulasan skor rendah",
+      x = "Aspek",
+      y = "Kata negatif"
+    ) +
+    theme_premium() +
+    theme(legend.position = "right", axis.text.x = element_text(angle = 35, hjust = 1))
+
+  ggsave(
+    file.path(figures_dir, "aspect_negative_term_heatmap_id.png"),
+    plot = p_negative_heatmap_id,
+    width = 10,
+    height = 7,
+    dpi = 300
+  )
+} else {
+  save_placeholder_plot(
+    "aspect_negative_term_heatmap_id.png",
+    "Kata Negatif yang Berasosiasi dengan Skor Aspek Rendah",
+    "Tidak ada kata negatif dengan lift skor rendah positif dalam sampel ini.",
+    width = 10,
+    height = 7
+  )
+}
+
+mismatch_type_id_lookup <- c(
+  "high overall rating with low aspect rating" = "rating keseluruhan tinggi dengan rating aspek rendah",
+  "low aspect rating with positive text sentiment" = "rating aspek rendah dengan sentimen teks positif",
+  "high aspect rating with negative text sentiment" = "rating aspek tinggi dengan sentimen teks negatif",
+  "low overall rating with high aspect rating" = "rating keseluruhan rendah dengan rating aspek tinggi"
+)
+mismatch_counts_id <- aspect_text_mismatches %>%
+  separate_rows(mismatch_types, sep = "; ") %>%
+  count(aspect, mismatch_types, name = "review_count")
+
+if (nrow(mismatch_counts_id) > 0) {
+  mismatch_aspect_order_id <- mismatch_counts_id %>%
+    group_by(aspect) %>%
+    summarise(total_cases = sum(review_count), .groups = "drop") %>%
+    arrange(total_cases) %>%
+    mutate(aspect_id = recode(aspect, !!!aspect_label_id_lookup)) %>%
+    pull(aspect_id)
+
+  mismatch_counts_id <- mismatch_counts_id %>%
+    mutate(
+      aspect_id = recode(aspect, !!!aspect_label_id_lookup),
+      aspect_id = factor(aspect_id, levels = mismatch_aspect_order_id),
+      mismatch_type_label = str_wrap(recode(mismatch_types, !!!mismatch_type_id_lookup), width = 34)
+    )
+
+  p_mismatches_id <- ggplot(
+    mismatch_counts_id,
+    aes(x = aspect_id, y = review_count, fill = mismatch_type_label)
+  ) +
+    geom_col(width = 0.72, alpha = 0.88) +
+    coord_flip() +
+    scale_fill_brewer(
+      palette = "Set2",
+      name = "Jenis ketidaksesuaian",
+      guide = guide_legend(nrow = 2, byrow = TRUE)
+    ) +
+    labs(
+      title = "Kasus Ketidaksesuaian Aspek-Teks untuk Tinjauan Kualitatif",
+      subtitle = "Hitungan menunjukkan ulasan ketika rating dan sinyal teks tidak sepenuhnya sejalan",
+      x = "Aspek",
+      y = "Kasus ulasan-aspek"
+    ) +
+    theme_premium() +
+    theme(legend.text = element_text(size = 8), plot.margin = margin(10, 18, 10, 18))
+
+  ggsave(
+    file.path(figures_dir, "aspect_text_mismatch_counts_id.png"),
+    plot = p_mismatches_id,
+    width = 11,
+    height = 7,
+    dpi = 300
+  )
+} else {
+  save_placeholder_plot(
+    "aspect_text_mismatch_counts_id.png",
+    "Kasus Ketidaksesuaian Aspek-Teks untuk Tinjauan Kualitatif",
+    "Sampel ini tidak menghasilkan kasus ketidaksesuaian aspek-teks.",
+    width = 11,
+    height = 7
+  )
+}
+
 cat("Aspect text analysis complete!\n")
 cat("- ", file.path(reports_dir, "aspect_text_alignment.csv"), "\n", sep = "")
 cat("- ", file.path(reports_dir, "aspect_text_band_summary.csv"), "\n", sep = "")

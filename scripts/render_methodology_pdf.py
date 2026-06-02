@@ -39,6 +39,11 @@ DOCUMENTS = {
         "pdf": PROJECT_ROOT / "output" / "pdf" / "bvlgari_review_analysis_report.pdf",
         "footer": "TripAdvisor Review Analytics Report for Bvlgari Resort Bali",
     },
+    "report_id": {
+        "markdown": PROJECT_ROOT / "output" / "reports" / "bvlgari_review_analysis_report_id.md",
+        "pdf": PROJECT_ROOT / "output" / "pdf" / "bvlgari_review_analysis_report_id.pdf",
+        "footer": "Laporan Analisis Ulasan TripAdvisor untuk Bvlgari Resort Bali",
+    },
     "methods": {
         "markdown": PROJECT_ROOT / "output" / "reports" / "bvlgari_review_analysis_methods.md",
         "pdf": PROJECT_ROOT / "output" / "pdf" / "bvlgari_review_analysis_methods.pdf",
@@ -220,7 +225,7 @@ def is_table_separator(line: str) -> bool:
 
 def table_widths(column_count: int, header: list[str]) -> list[float]:
     """Choose readable column widths for the table shapes used in the paper."""
-    if column_count == 9 and "year" in header[0].lower():
+    if column_count == 9 and header[0].lower() in {"year", "tahun"}:
         return [
             0.46 * inch,
             0.48 * inch,
@@ -232,7 +237,7 @@ def table_widths(column_count: int, header: list[str]) -> list[float]:
             0.29 * inch,
             0.29 * inch,
         ]
-    if column_count == 6 and header[0].lower() == "aspect":
+    if column_count == 6 and header[0].lower() in {"aspect", "aspek"}:
         return [1.1 * inch, 0.78 * inch, 0.7 * inch, 0.62 * inch, 0.62 * inch, 1.18 * inch]
     if column_count == 5:
         return [1.15 * inch, 1.0 * inch, 1.0 * inch, 1.0 * inch, 1.0 * inch]
@@ -267,7 +272,7 @@ def make_table(lines: list[str]) -> list:
     if total_width > USABLE_WIDTH:
         widths = [width * USABLE_WIDTH / total_width for width in widths]
 
-    table = Table(table_data, colWidths=widths, repeatRows=1, hAlign="LEFT")
+    table = Table(table_data, colWidths=widths, repeatRows=1, hAlign="CENTER")
     table.setStyle(
         TableStyle(
             [

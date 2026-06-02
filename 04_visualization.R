@@ -347,6 +347,160 @@ if (length(available_geography_columns) > 0) {
   geography_source_label <- "No non-identifying reviewer geography field in prepared dataset"
 }
 
+# ---------------------------------------------------------------------
+# Extra Chart: Median Text Sentiment by Reviewer Region
+# ---------------------------------------------------------------------
+# The students asked for a bar chart that compares sentiment by region.
+# We use the median, not the average, because review sentiment has outliers:
+# one very angry or very enthusiastic review can pull an average up or down.
+# The median is the middle review in a region, so it gives a steadier picture.
+#
+# We also use the length-normalized AFINN score. Raw AFINN is a summed score,
+# so longer reviews can look more positive or negative simply because they use
+# more words. Normalizing to the dataset's median review length makes regions
+# easier to compare fairly.
+minimum_reviews_for_region_sentiment <- 5
+
+if (is.na(available_geography_column)) {
+  write_csv(
+    tibble(
+      region = character(),
+      review_count = integer(),
+      median_afinn_per_median_review = numeric(),
+      mean_afinn_per_median_review = numeric()
+    ),
+    sentiment_by_region_summary_path
+  )
+  save_placeholder_plot(
+    basename(sentiment_by_region_plot_path),
+    "Median Sentiment Score by Reviewer Region",
+    "No non-identifying reviewer geography field is available in the prepared dataset."
+  )
+  save_placeholder_plot(
+    basename(sentiment_by_region_plot_id_path),
+    "Skor Sentimen Median menurut Region Pengulas",
+    "Tidak ada kolom geografi pengulas non-identifikasi dalam dataset yang disiapkan."
+  )
+} else {
+  sentiment_by_region <- research_data %>%
+    prepare_length_normalized_sentiment() %>%
+    mutate(
+      region = str_squish(as.character(.data[[available_geography_column]])),
+      region = na_if(region, ""),
+      region = replace_na(region, "Unknown")
+    ) %>%
+    filter(
+      region != "Unknown",
+      !is.na(score_afinn_per_median_review)
+    ) %>%
+    group_by(region) %>%
+    summarise(
+      review_count = n(),
+      median_afinn_per_median_review = median(score_afinn_per_median_review, na.rm = TRUE),
+      mean_afinn_per_median_review = mean(score_afinn_per_median_review, na.rm = TRUE),
+      negative_text_share = mean(score_afinn_per_median_review < 0, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    filter(review_count >= minimum_reviews_for_region_sentiment) %>%
+    mutate(
+      median_afinn_per_median_review = round(median_afinn_per_median_review, 2),
+      mean_afinn_per_median_review = round(mean_afinn_per_median_review, 2),
+      negative_text_share = round(negative_text_share, 3)
+    ) %>%
+    arrange(desc(median_afinn_per_median_review), desc(review_count), region)
+
+  write_csv(sentiment_by_region, sentiment_by_region_summary_path)
+
+  if (nrow(sentiment_by_region) == 0) {
+    save_placeholder_plot(
+      basename(sentiment_by_region_plot_path),
+      "Median Sentiment Score by Reviewer Region",
+      paste0(
+        "No reviewer region had at least ",
+        minimum_reviews_for_region_sentiment,
+        " reviews with sentiment scores."
+      )
+    )
+    save_placeholder_plot(
+      basename(sentiment_by_region_plot_id_path),
+      "Skor Sentimen Median menurut Region Pengulas",
+      paste0(
+        "Tidak ada region pengulas dengan sedikitnya ",
+        minimum_reviews_for_region_sentiment,
+        " ulasan yang memiliki skor sentimen."
+      )
+    )
+  } else {
+    region_plot_data <- sentiment_by_region %>%
+      arrange(median_afinn_per_median_review) %>%
+      mutate(region = factor(region, levels = region))
+    region_chart_height <- max(6.3, nrow(region_plot_data) * 0.38)
+
+    p_region_sentiment <- ggplot(
+      region_plot_data,
+      aes(x = region, y = median_afinn_per_median_review)
+    ) +
+      geom_col(width = 0.72, fill = "#0F766E", alpha = 0.88) +
+      geom_hline(yintercept = 0, color = "#334155", linewidth = 0.45) +
+      geom_text(
+        aes(label = paste0("n=", review_count)),
+        hjust = -0.12,
+        size = 3.1,
+        fontface = "bold",
+        color = "#2C3E50"
+      ) +
+      coord_flip() +
+      scale_y_continuous(expand = expansion(mult = c(0.02, 0.16))) +
+      labs(
+        title = "Median Sentiment Score by Reviewer Region",
+        subtitle = paste0(
+          "Bars use AFINN scores normalized to the median review length\n",
+          "Only regions with at least ",
+          minimum_reviews_for_region_sentiment,
+          " reviews are shown; Unknown locations are excluded"
+        ),
+        x = "Reviewer Region",
+        y = "Median AFINN Score per Median-Length Review"
+      ) +
+      theme_premium()
+
+    show_plot_for_interactive_use(p_region_sentiment)
+    ggsave(sentiment_by_region_plot_path, plot = p_region_sentiment, width = 10, height = region_chart_height, dpi = 300)
+
+    # Save a localized Indonesian version for the Indonesian methods paper.
+    # The data are exactly the same; only the chart text changes.
+    p_region_sentiment_id <- ggplot(
+      region_plot_data,
+      aes(x = region, y = median_afinn_per_median_review)
+    ) +
+      geom_col(width = 0.72, fill = "#0F766E", alpha = 0.88) +
+      geom_hline(yintercept = 0, color = "#334155", linewidth = 0.45) +
+      geom_text(
+        aes(label = paste0("n=", review_count)),
+        hjust = -0.12,
+        size = 3.1,
+        fontface = "bold",
+        color = "#2C3E50"
+      ) +
+      coord_flip() +
+      scale_y_continuous(expand = expansion(mult = c(0.02, 0.16))) +
+      labs(
+        title = "Skor Sentimen Median menurut Region Pengulas",
+        subtitle = paste0(
+          "Batang menggunakan skor AFINN yang dinormalisasi ke panjang ulasan median\n",
+          "Hanya region dengan sedikitnya ",
+          minimum_reviews_for_region_sentiment,
+          " ulasan yang ditampilkan; lokasi tanpa keterangan dikeluarkan"
+        ),
+        x = "Region Pengulas",
+        y = "Skor AFINN median (dinormalisasi)"
+      ) +
+      theme_premium()
+
+    ggsave(sentiment_by_region_plot_id_path, plot = p_region_sentiment_id, width = 10, height = region_chart_height, dpi = 300)
+  }
+}
+
 # Start with one clean row per review for the annual profile table.
 # We parse dates and ratings as numbers so R can group reviews by year and count
 # how many 5-star, 4-star, 3-star, 2-star, and 1-star reviews appear each year.
@@ -831,6 +985,13 @@ if (nrow(sentiment_word_counts) == 0) {
     width = 5.4,
     height = 5.4
   )
+  save_placeholder_plot(
+    "wordcloud_id.png",
+    "Word Cloud Kata Bersentimen",
+    "Tidak ada kata bersentimen AFINN yang ditemukan setelah token ulasan bersih disaring.",
+    width = 5.4,
+    height = 5.4
+  )
 } else {
   max_sentiment_cloud_words <- min(40, nrow(sentiment_word_counts))
 
@@ -871,6 +1032,23 @@ if (nrow(sentiment_word_counts) == 0) {
     colors = sentiment_word_colors # Green means positive, red means negative
   )
   dev.off() # Close the digital canvas and save the file!
+
+  # The Indonesian paper still shows the original review words because those
+  # words are data values from the corpus. Only chart titles and labels are
+  # localized elsewhere; translating the words would change the evidence.
+  png(file.path(figures_dir, "wordcloud_id.png"), width = 800, height = 800, res = 150)
+  set.seed(123)
+  wordcloud(
+    words = sentiment_word_counts$word,
+    freq = sentiment_word_counts$n,
+    min.freq = 2,
+    max.words = max_sentiment_cloud_words,
+    random.order = FALSE,
+    rot.per = 0.2,
+    ordered.colors = TRUE,
+    colors = sentiment_word_colors
+  )
+  dev.off()
 }
 
 # =====================================================================
@@ -1485,7 +1663,316 @@ p6 <- ggplot(trend_reviews, aes(x = year_index, y = score_afinn, group = year_in
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 show_plot_for_interactive_use(p6)
-ggsave(file.path(figures_dir, "sentiment_trend_yearly.png"), plot = p6, width = 16, height = 8, dpi = 300)
+ggsave(
+  file.path(figures_dir, "sentiment_trend_yearly.png"),
+  plot = p6,
+  width = 16,
+  height = 8,
+  dpi = 300,
+  device = grDevices::png
+)
+
+# =====================================================================
+# STEP 8: Save Indonesian Versions of the R-Generated Figures
+# =====================================================================
+# The Indonesian report needs localized chart titles, subtitles, axes, and
+# legends. We keep the underlying review words, locations, and scores unchanged
+# because those are the actual data values being analyzed.
+aspect_label_id_lookup <- c(
+  "Value" = "Nilai",
+  "Rooms" = "Kamar",
+  "Location" = "Lokasi",
+  "Cleanliness" = "Kebersihan",
+  "Service" = "Layanan",
+  "Sleep quality" = "Kualitas tidur"
+)
+aspect_label_id_levels <- unname(aspect_label_id_lookup)
+month_labels_id <- c("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des")
+make_month_label_id <- function(dates) {
+  paste(month_labels_id[lubridate::month(dates)], lubridate::year(dates))
+}
+
+sentiment_counts_id <- sentiment_counts %>%
+  mutate(
+    sentiment_category_id = recode(
+      sentiment_category,
+      "Positive" = "Positif",
+      "Neutral" = "Netral",
+      "Negative" = "Negatif"
+    ),
+    sentiment_category_id = factor(sentiment_category_id, levels = c("Negatif", "Netral", "Positif"))
+  )
+
+p1_id <- ggplot(sentiment_counts_id, aes(x = sentiment_category_id, y = review_count, fill = sentiment_category_id)) +
+  geom_col(width = 0.6, alpha = 0.85) +
+  geom_text(aes(label = review_count), vjust = -0.4, fontface = "bold", color = "#2C3E50") +
+  scale_fill_manual(values = c("Positif" = "#16A085", "Negatif" = "#E74C3C", "Netral" = "#95A5A6")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title = "Distribusi Sentimen Ulasan TripAdvisor",
+    subtitle = "Opini tamu Bvlgari Resort Bali dari dataset ulasan TripAdvisor yang disiapkan",
+    x = "Kategori Sentimen",
+    y = "Jumlah Ulasan"
+  ) +
+  theme_premium()
+ggsave(file.path(figures_dir, "sentiment_distribution_id.png"), plot = p1_id, width = 7, height = 5, dpi = 300)
+
+p1b_id <- ggplot(rating_sentiment, aes(x = rating_number, y = score_afinn, group = rating_number, fill = rating_group)) +
+  geom_boxplot(alpha = 0.82, outlier.alpha = 0.35, width = 0.62) +
+  geom_segment(
+    data = rating_average_line,
+    aes(x = x, xend = x, y = y, yend = yend),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    color = "#2C3E50",
+    linewidth = 0.8
+  ) +
+  annotate(
+    "label",
+    x = average_rating,
+    y = rating_axis_ceiling,
+    label = paste0("Rating rata-rata: ", round(average_rating, 2), "/5"),
+    vjust = 1.1,
+    size = 3,
+    color = "#2C3E50",
+    fill = "white"
+  ) +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 3, fill = "#2C3E50", color = "white") +
+  geom_text(
+    data = rating_counts,
+    aes(x = rating_number, y = rating_label_y, label = paste0("n=", review_count)),
+    inherit.aes = FALSE,
+    fontface = "bold",
+    color = "#2C3E50",
+    size = 3.2
+  ) +
+  scale_fill_brewer(palette = "RdYlGn") +
+  scale_x_continuous(breaks = 1:5, labels = paste(1:5, "bintang"), expand = expansion(mult = c(0.08, 0.08))) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.02))) +
+  coord_cartesian(ylim = c(rating_axis_floor, rating_axis_ceiling)) +
+  labs(
+    title = "Distribusi Skor Sentimen menurut Rating TripAdvisor",
+    subtitle = "Diagram kotak menunjukkan sentimen teks menurut rating; berlian menunjukkan rata-rata sentimen kelompok\nGaris putus-putus menunjukkan rating TripAdvisor rata-rata keseluruhan",
+    x = "Rating TripAdvisor",
+    y = "Skor Sentimen AFINN"
+  ) +
+  theme_premium()
+ggsave(file.path(figures_dir, "sentiment_by_rating_boxplot_id.png"), plot = p1b_id, width = 9.5, height = 5.8, dpi = 300)
+
+if (exists("aspect_summary") && isTRUE(has_usable_aspect_ratings)) {
+  aspect_summary_id <- aspect_summary %>%
+    mutate(
+      aspect_label_id = recode(as.character(aspect_label), !!!aspect_label_id_lookup),
+      aspect_label_id = factor(aspect_label_id, levels = aspect_label_id_levels)
+    )
+  aspect_colors_id <- setNames(aspect_colors[names(aspect_label_id_lookup)], aspect_label_id_lookup)
+
+  p_aspect_mean_id <- ggplot(
+    aspect_summary_id,
+    aes(x = reorder(aspect_label_id, mean_rating), y = mean_rating, fill = aspect_label_id)
+  ) +
+    geom_col(width = 0.72, alpha = 0.88) +
+    geom_text(aes(label = round(mean_rating, 2)), hjust = -0.15, fontface = "bold", color = "#2C3E50", size = 3.3) +
+    coord_flip() +
+    scale_fill_manual(values = aspect_colors_id) +
+    scale_y_continuous(limits = c(0, 5), expand = expansion(mult = c(0, 0.1))) +
+    labs(
+      title = "Rata-Rata Rating Aspek Pengalaman Tamu",
+      subtitle = "Skor aspek terstruktur TripAdvisor menunjukkan dimensi pengalaman yang paling kuat atau lemah",
+      x = "Aspek",
+      y = "Rating rata-rata"
+    ) +
+    theme_premium()
+  ggsave(file.path(figures_dir, "aspect_mean_ratings_id.png"), plot = p_aspect_mean_id, width = 8.5, height = 5.4, dpi = 300)
+
+  p_aspect_low_id <- ggplot(
+    aspect_summary_id,
+    aes(x = reorder(aspect_label_id, low_score_share), y = low_score_share, fill = aspect_label_id)
+  ) +
+    geom_col(width = 0.72, alpha = 0.88) +
+    geom_text(aes(label = paste0(scales::percent(low_score_share, accuracy = 0.1), "\nn=", low_score_count)), hjust = -0.12, fontface = "bold", color = "#2C3E50", size = 3) +
+    coord_flip() +
+    scale_fill_manual(values = aspect_colors_id) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.18))) +
+    labs(
+      title = "Pangsa Skor Rendah menurut Aspek Pengalaman Tamu",
+      subtitle = "Skor rendah menghitung rating aspek dari 1 sampai 3 bintang",
+      x = "Aspek",
+      y = "Pangsa rating aspek 1-3 bintang"
+    ) +
+    theme_premium()
+  ggsave(file.path(figures_dir, "aspect_low_score_share_id.png"), plot = p_aspect_low_id, width = 8.5, height = 5.4, dpi = 300)
+
+  if (exists("aspect_yearly") && nrow(aspect_yearly) > 0) {
+    aspect_yearly_id <- aspect_yearly %>%
+      mutate(
+        aspect_label_id = recode(as.character(aspect_label), !!!aspect_label_id_lookup),
+        aspect_label_id = factor(aspect_label_id, levels = aspect_label_id_levels)
+      )
+
+    p_aspect_heatmap_id <- ggplot(aspect_yearly_id, aes(x = aspect_label_id, y = year_label, fill = rating_for_fill)) +
+      geom_tile(color = "white", linewidth = 0.4) +
+      geom_text(aes(label = heatmap_label), size = 2.4, color = "#2C3E50", lineheight = 0.85) +
+      scale_fill_gradient2(
+        low = "#C0392B",
+        mid = "#F7F9F9",
+        high = "#16A085",
+        midpoint = 4,
+        name = "Rating\nrata-rata",
+        na.value = "#D5DBDB"
+      ) +
+      labs(
+        title = "Heatmap Rating Aspek Tahunan",
+        subtitle = "Sel abu-abu memiliki kurang dari 5 rating aspek; label menunjukkan rating rata-rata dan n ketika data cukup",
+        x = "Aspek",
+        y = "Tahun"
+      ) +
+      theme_premium() +
+      theme(legend.position = "right", axis.text.x = element_text(angle = 35, hjust = 1))
+    ggsave(file.path(figures_dir, "aspect_yearly_rating_heatmap_id.png"), plot = p_aspect_heatmap_id, width = 10, height = 7, dpi = 300)
+  }
+}
+
+emotion_label_id_lookup <- c(
+  "trust" = "percaya",
+  "joy" = "gembira",
+  "anticipation" = "antisipasi",
+  "surprise" = "terkejut",
+  "sadness" = "sedih",
+  "fear" = "takut",
+  "anger" = "marah",
+  "disgust" = "jijik"
+)
+emotions_summary_id <- emotions_summary %>%
+  mutate(emotion_id = recode(emotion, !!!emotion_label_id_lookup))
+
+p2_id <- ggplot(emotions_summary_id, aes(x = reorder(emotion_id, score), y = score, fill = emotion_id)) +
+  geom_col(alpha = 0.85, width = 0.7) +
+  geom_text(aes(label = format(score, big.mark = ",")), hjust = -0.15, fontface = "bold", color = "#2C3E50") +
+  coord_flip() +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title = "Profil Emosi Terperinci dari Pengalaman Tamu",
+    subtitle = "Metrik analisis emosi NRC Lexicon untuk ulasan hotel",
+    x = "Dimensi Emosi",
+    y = "Total Skor Emosi"
+  ) +
+  theme_premium()
+ggsave(file.path(figures_dir, "emotions_breakdown_id.png"), plot = p2_id, width = 8, height = 5, dpi = 300)
+
+month_averages_id <- month_averages %>%
+  mutate(
+    month_name_id = factor(month_labels_id[lubridate::month(month_start)], levels = month_labels_id)
+  )
+month_break_labels_id <- make_month_label_id(month_lookup$month_start[seq(1, nrow(month_lookup), by = 6)])
+
+p4_heatmap_id <- ggplot(month_averages_id, aes(x = month_name_id, y = year_label, fill = period_avg)) +
+  geom_tile(color = "white", linewidth = 0.4) +
+  geom_text(aes(label = heatmap_label), size = 2.1, color = "#2C3E50", lineheight = 0.85) +
+  scale_fill_gradient2(
+    low = "#C0392B",
+    mid = "#F7F9F9",
+    high = "#16A085",
+    midpoint = 0,
+    name = "Rata-rata\nAFINN\nternormalisasi",
+    na.value = "#F4F6F7"
+  ) +
+  labs(
+    title = "Heatmap Sentimen Bulanan (AFINN Ternormalisasi)",
+    subtitle = "Setiap sel menunjukkan rata-rata sentimen bulanan yang dinormalisasi dan jumlah ulasan",
+    x = "Bulan",
+    y = "Tahun"
+  ) +
+  theme_premium() +
+  theme(legend.position = "right", axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave(file.path(figures_dir, "sentiment_trend_monthly_heatmap_id.png"), plot = p4_heatmap_id, width = 10, height = 8, dpi = 300)
+
+p4_rolling_id <- p4_rolling +
+  scale_x_continuous(breaks = month_breaks, labels = month_break_labels_id) +
+  labs(
+    title = "Tren Sentimen Bulanan (AFINN Ternormalisasi)",
+    subtitle = "Titik menunjukkan rata-rata bulanan; ukuran titik mengikuti jumlah ulasan\nGaris biru = rata-rata bergerak 6 bulan; garis titik = rata-rata historis sebelumnya",
+    x = "Linimasa (Bulan/Tahun)",
+    y = "AFINN ternormalisasi"
+  )
+ggsave(file.path(figures_dir, "sentiment_trend_monthly_rolling_id.png"), plot = p4_rolling_id, width = 10, height = 5.5, dpi = 300)
+
+if (exists("p4_drift")) {
+  p4_drift_id <- p4_drift +
+    labs(
+      title = "Monitor Pergeseran Sentimen Bulanan",
+      subtitle = "Median AFINN bulanan dibandingkan dengan ulasan sebelumnya menggunakan median historis dan MAD",
+      x = "Bulan ulasan",
+      y = "z-score robust"
+    )
+  ggsave(file.path(figures_dir, "sentiment_drift_monitor_id.png"), plot = p4_drift_id, width = 10, height = 5.5, dpi = 300)
+} else {
+  save_placeholder_plot(
+    "sentiment_drift_monitor_id.png",
+    "Monitor Pergeseran Sentimen Bulanan",
+    "Belum ada cukup ulasan historis untuk menghitung skor drift robust.",
+    width = 10,
+    height = 5.5
+  )
+}
+
+quarter_averages_id <- quarter_averages %>%
+  mutate(stats_label = paste0("rata2 ", round(period_avg, 1), "\nn=", review_count))
+p5_id <- ggplot(trend_reviews, aes(x = quarter_index, y = score_afinn, group = quarter_index)) +
+  geom_boxplot(fill = "#D5F5E3", color = "#1E8449", alpha = 0.85, outlier.alpha = 0.35) +
+  geom_point(data = quarter_averages_id, aes(x = quarter_index, y = period_avg), shape = 23, size = 2.8, fill = "#C0392B", color = "white", inherit.aes = FALSE) +
+  geom_line(data = filter(quarter_averages_id, !is.na(prior_avg)), aes(x = quarter_index, y = prior_avg), color = "#7F8C8D", linetype = "dotted", linewidth = 1, inherit.aes = FALSE) +
+  geom_text(data = quarter_averages_id, aes(x = quarter_index, y = stats_label_y, label = stats_label), angle = 90, hjust = 0.5, size = 1.9, color = "#34495E", inherit.aes = FALSE) +
+  scale_x_continuous(breaks = quarter_breaks, labels = quarter_labels) +
+  scale_y_continuous(limits = c(stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title = "Distribusi Sentimen Kuartalan (AFINN Ternormalisasi)",
+    subtitle = "Setiap diagram kotak merangkum satu kuartal; label menunjukkan rata-rata kuartal dan n; garis titik menunjukkan rata-rata sebelum kuartal",
+    x = "Kuartal",
+    y = "AFINN ternormalisasi"
+  ) +
+  theme_premium() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
+ggsave(file.path(figures_dir, "sentiment_trend_quarterly_id.png"), plot = p5_id, width = 14, height = 6, dpi = 300)
+
+year_averages_id <- year_averages %>%
+  mutate(
+    stats_label = paste0(
+      "n=", review_count,
+      "\nrata2=", format_stat(period_avg),
+      "\nmedian=", format_stat(period_median),
+      "\npangkas=", format_stat(period_trimmed_mean),
+      "\nq1=", format_stat(period_q1),
+      "\nq3=", format_stat(period_q3),
+      "\nmin=", format_stat(period_min),
+      "\nmaks=", format_stat(period_max),
+      "\npencilan=", n_outliers
+    )
+  )
+p6_id <- ggplot(trend_reviews, aes(x = year_index, y = score_afinn, group = year_index)) +
+  geom_boxplot(fill = "#FADBD8", color = "#922B21", alpha = 0.85, outlier.alpha = 0.35) +
+  geom_point(data = year_averages_id, aes(x = year_index, y = period_avg), shape = 23, size = 3, fill = "#2C3E50", color = "white", inherit.aes = FALSE) +
+  geom_text(data = year_averages_id, aes(x = year_index, y = year_stats_label_y, label = stats_label), vjust = 0.5, size = 2, lineheight = 0.86, color = "#2C3E50", inherit.aes = FALSE) +
+  geom_line(data = filter(year_averages_id, !is.na(prior_avg)), aes(x = year_index, y = prior_avg), color = "#7F8C8D", linetype = "dotted", linewidth = 1, inherit.aes = FALSE) +
+  scale_x_continuous(breaks = year_averages_id$year_index, labels = year_averages_id$year_label) +
+  scale_y_continuous(limits = c(year_stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
+  labs(
+    title = "Distribusi Sentimen Tahunan (AFINN Ternormalisasi)",
+    subtitle = "Setiap diagram kotak merangkum satu tahun; label menunjukkan n, rata-rata, median, kuartil, min, maks, dan pencilan",
+    x = "Tahun",
+    y = "AFINN ternormalisasi"
+  ) +
+  theme_premium() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave(
+  file.path(figures_dir, "sentiment_trend_yearly_id.png"),
+  plot = p6_id,
+  width = 16,
+  height = 8,
+  dpi = 300,
+  device = grDevices::png
+)
 
 if (interactive()) {
   cat("Showing the emotions breakdown chart again in the RStudio Plots pane.\n")
