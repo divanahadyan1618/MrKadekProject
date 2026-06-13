@@ -334,6 +334,239 @@ prepare_length_normalized_sentiment <- function(data) {
     )
 }
 
+#' Normalize Reviewer Locations to Countries
+#'
+#' TripAdvisor reviewer geography is self-reported free text. The same country
+#' can appear as "Singapore", "Singapore, Singapore", or a city such as
+#' "Jakarta, Indonesia". This helper keeps the original reviewer_location column
+#' intact, but creates a country-level label for aggregate tables and charts.
+#' It uses conservative rules and common aliases from the project data instead
+#' of pretending to be a complete geocoder.
+#'
+#' @param location_values A character vector of reviewer location strings.
+#' @return A character vector with country-level labels or NA when unavailable.
+#' @export
+normalize_reviewer_country <- function(location_values) {
+  location_text <- as.character(location_values)
+  location_text <- str_squish(location_text)
+  location_text <- str_replace_all(location_text, "\\s*,\\s*", ", ")
+  # Some TripAdvisor location strings include profile contribution counts after
+  # the actual place. Remove that trailing profile text before parsing country.
+  location_text <- str_remove(location_text, "\\s+[0-9][0-9,]*\\s+contributions?.*$")
+  location_text <- str_remove(location_text, "\\s+[0-9][0-9,]*\\s+helpful votes?.*$")
+  location_text <- str_replace_all(location_text, regex("\\bSignapore\\b", ignore_case = TRUE), "Singapore")
+  location_text <- str_replace_all(location_text, regex("\\bThe Netherlands\\b", ignore_case = TRUE), "Netherlands")
+  location_text <- str_squish(location_text)
+
+  missing_location <- is.na(location_text) |
+    location_text == "" |
+    str_to_lower(location_text) %in% c("na", "n/a", "unknown", "none", "null", "-")
+  location_text[missing_location] <- NA_character_
+
+  country_aliases <- c(
+    "angola" = "Angola",
+    "australia" = "Australia",
+    "austria" = "Austria",
+    "belgium" = "Belgium",
+    "brazil" = "Brazil",
+    "canada" = "Canada",
+    "china" = "China",
+    "colombia" = "Colombia",
+    "finland" = "Finland",
+    "france" = "France",
+    "germany" = "Germany",
+    "greece" = "Greece",
+    "hong kong" = "Hong Kong",
+    "hk" = "Hong Kong",
+    "india" = "India",
+    "indonesia" = "Indonesia",
+    "israel" = "Israel",
+    "italy" = "Italy",
+    "japan" = "Japan",
+    "jordan" = "Jordan",
+    "kuwait" = "Kuwait",
+    "lebanon" = "Lebanon",
+    "malaysia" = "Malaysia",
+    "maldives" = "Maldives",
+    "mariana islands" = "Mariana Islands",
+    "mexico" = "Mexico",
+    "monaco" = "Monaco",
+    "netherlands" = "Netherlands",
+    "new zealand" = "New Zealand",
+    "norway" = "Norway",
+    "philippines" = "Philippines",
+    "portugal" = "Portugal",
+    "puerto rico" = "Puerto Rico",
+    "qatar" = "Qatar",
+    "republic of north macedonia" = "North Macedonia",
+    "romania" = "Romania",
+    "saudi arabia" = "Saudi Arabia",
+    "serbia" = "Serbia",
+    "singapore" = "Singapore",
+    "south africa" = "South Africa",
+    "south korea" = "South Korea",
+    "spain" = "Spain",
+    "sweden" = "Sweden",
+    "switzerland" = "Switzerland",
+    "taiwan" = "Taiwan",
+    "thailand" = "Thailand",
+    "the netherlands" = "Netherlands",
+    "turkey" = "Turkey",
+    "turkiye" = "Turkey",
+    "united arab emirates" = "United Arab Emirates",
+    "united kingdom" = "United Kingdom",
+    "united states" = "United States",
+    "usa" = "United States",
+    "vietnam" = "Vietnam",
+    "yemen" = "Yemen"
+  )
+
+  us_state_aliases <- c(
+    "alabama", "alaska", "arizona", "arkansas", "california", "ca",
+    "colorado", "connecticut", "ct", "delaware", "district of columbia",
+    "florida", "georgia", "hawaii", "idaho", "illinois", "indiana",
+    "iowa", "kansas", "kentucky", "louisiana", "la", "maine", "maryland",
+    "massachusetts", "michigan", "minnesota", "mississippi", "missouri",
+    "montana", "nebraska", "nevada", "new hampshire", "new jersey",
+    "new mexico", "new york", "north carolina", "north dakota", "ohio",
+    "oklahoma", "oregon", "pennsylvania", "rhode island",
+    "south carolina", "south dakota", "tennessee", "texas", "utah",
+    "vermont", "virginia", "washington", "washington dc", "wisconsin",
+    "wyoming"
+  )
+  brazil_state_aliases <- c("rj", "sp", "pe", "sao paulo")
+
+  city_country_aliases <- c(
+    "abu dhabi" = "United Arab Emirates",
+    "adelaide" = "Australia",
+    "ahmedabad" = "India",
+    "airlie beach" = "Australia",
+    "amsterdam" = "Netherlands",
+    "auckland" = "New Zealand",
+    "auckland central" = "New Zealand",
+    "auckland region" = "New Zealand",
+    "bali" = "Indonesia",
+    "bandung" = "Indonesia",
+    "bangalore district" = "India",
+    "bangkok" = "Thailand",
+    "brisbane" = "Australia",
+    "canggu" = "Indonesia",
+    "cebu city" = "Philippines",
+    "chennai (madras)" = "India",
+    "choa chu kang" = "Singapore",
+    "da lat" = "Vietnam",
+    "darwin" = "Australia",
+    "denpasar" = "Indonesia",
+    "dhaalu atoll" = "Maldives",
+    "doha" = "Qatar",
+    "dubai" = "United Arab Emirates",
+    "emirate of dubai" = "United Arab Emirates",
+    "geelong" = "Australia",
+    "hong kong" = "Hong Kong",
+    "hyderabad" = "India",
+    "istanbul" = "Turkey",
+    "jakarta" = "Indonesia",
+    "jakarta raya" = "Indonesia",
+    "jimbaran" = "Indonesia",
+    "kohima" = "India",
+    "kolkata" = "India",
+    "kolkata (calcutta)" = "India",
+    "kuala lumpur" = "Malaysia",
+    "london" = "United Kingdom",
+    "makati" = "Philippines",
+    "malang" = "Indonesia",
+    "manila" = "Philippines",
+    "medan" = "Indonesia",
+    "melbourne" = "Australia",
+    "milan" = "Italy",
+    "milano" = "Italy",
+    "mumbai" = "India",
+    "new delhi" = "India",
+    "new york" = "United States",
+    "new york city" = "United States",
+    "nyc" = "United States",
+    "osaka" = "Japan",
+    "osaka-shi" = "Japan",
+    "oslo" = "Norway",
+    "palma de mallorca" = "Spain",
+    "paris" = "France",
+    "pecatu" = "Indonesia",
+    "penang island" = "Malaysia",
+    "perth" = "Australia",
+    "porto" = "Portugal",
+    "riyadh" = "Saudi Arabia",
+    "sao paulo" = "Brazil",
+    "sentosa island" = "Singapore",
+    "seoul" = "South Korea",
+    "shanghai" = "China",
+    "shenzhen" = "China",
+    "shinjuku" = "Japan",
+    "singapore" = "Singapore",
+    "surabaya" = "Indonesia",
+    "sydney" = "Australia",
+    "taguig city" = "Philippines",
+    "taipei" = "Taiwan",
+    "tanjungpinang" = "Indonesia",
+    "tokyo" = "Japan",
+    "ubud" = "Indonesia",
+    "uluwatu" = "Indonesia",
+    "yogyakarta region" = "Indonesia"
+  )
+
+  normalize_one <- function(location_one) {
+    if (is.na(location_one)) {
+      return(NA_character_)
+    }
+
+    parts <- str_split(location_one, ",", simplify = FALSE)[[1]] %>%
+      str_squish()
+    parts <- parts[parts != ""]
+    parts_lower <- str_to_lower(parts)
+    full_lower <- str_to_lower(location_one)
+
+    if (full_lower %in% names(country_aliases)) {
+      return(unname(country_aliases[[full_lower]]))
+    }
+    for (country_key in names(country_aliases)) {
+      # Some source rows omit the comma, for example "Jakarta Indonesia".
+      # If the final words are a known country, use that country.
+      if (str_ends(full_lower, paste0(" ", country_key))) {
+        return(unname(country_aliases[[country_key]]))
+      }
+    }
+
+    last_part <- parts_lower[length(parts_lower)]
+    if (last_part %in% names(country_aliases)) {
+      return(unname(country_aliases[[last_part]]))
+    }
+    if (last_part %in% us_state_aliases) {
+      return("United States")
+    }
+    if (last_part %in% brazil_state_aliases) {
+      return("Brazil")
+    }
+
+    for (part in parts_lower) {
+      if (part %in% names(city_country_aliases)) {
+        return(unname(city_country_aliases[[part]]))
+      }
+    }
+    if (full_lower %in% us_state_aliases) {
+      return("United States")
+    }
+    if (full_lower %in% brazil_state_aliases) {
+      return("Brazil")
+    }
+    if (full_lower %in% names(city_country_aliases)) {
+      return(unname(city_country_aliases[[full_lower]]))
+    }
+
+    location_one
+  }
+
+  vapply(location_text, normalize_one, character(1), USE.NAMES = FALSE)
+}
+
 #' Standardize Raw Hotel Review Columns
 #'
 #' Review exports often use source-specific column names such as `text`,
@@ -534,6 +767,16 @@ standardize_hotel_reviews <- function(raw_data) {
       across(c(review_id, hotel_name, title, review_text, review_date), str_squish)
     ) %>%
     filter(!is.na(review_text), review_text != "")
+
+  if ("reviewer_location" %in% names(standardized)) {
+    standardized <- standardized %>%
+      mutate(
+        # Keep reviewer_location unchanged, but add a country-level version for
+        # aggregate geography tables so "Singapore, Singapore" and "Singapore"
+        # count together.
+        reviewer_country = normalize_reviewer_country(reviewer_location)
+      )
+  }
 
   if ("trip_type" %in% names(standardized)) {
     standardized <- standardized %>%

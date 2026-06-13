@@ -523,6 +523,12 @@ class DataWiringTests(unittest.TestCase):
         if (camel_case_standardized$reviewer_location[[1]] != "Jakarta Indonesia") {
           stop("Camel-case reviewer location value changed during standardization.")
         }
+        if (!"reviewer_country" %in% names(camel_case_standardized)) {
+          stop("Normalized reviewer country was not added.")
+        }
+        if (camel_case_standardized$reviewer_country[[1]] != "Indonesia") {
+          stop("Jakarta Indonesia did not normalize to Indonesia.")
+        }
 
         spaced_reviews <- tibble::tibble(
           review_id = "r2",
@@ -542,6 +548,21 @@ class DataWiringTests(unittest.TestCase):
         }
         if (spaced_standardized$reviewer_location[[1]] != "Singapore Singapore") {
           stop("Spaced reviewer location value changed during standardization.")
+        }
+        if (spaced_standardized$reviewer_country[[1]] != "Singapore") {
+          stop("Singapore reviewer location did not normalize to Singapore.")
+        }
+
+        normalized_examples <- normalize_reviewer_country(c(
+          "Signapore, Signapore",
+          "Singapore",
+          "Jakarta, Indonesia",
+          "New York City, New York",
+          "NA"
+        ))
+        expected_examples <- c("Singapore", "Singapore", "Indonesia", "United States", NA)
+        if (!identical(normalized_examples, expected_examples)) {
+          stop("Reviewer country normalization examples did not match expected values.")
         }
         """
         result = subprocess.run(
@@ -1588,6 +1609,52 @@ class DataWiringTests(unittest.TestCase):
         self.assertIn("aspect_rating_columns", notebook)
         self.assertIn("aspect_mean_ratings.png", notebook)
 
+    def test_non_selected_figures_are_disabled_by_default(self):
+        visualization_script = (PROJECT_ROOT / "04_visualization.R").read_text()
+        aspect_text_script = (PROJECT_ROOT / "05_aspect_text_analysis.R").read_text()
+
+        for active_switch in [
+            "draw_sentiment_distribution <- TRUE",
+            "draw_aspect_yearly_heatmap <- TRUE",
+            "draw_monthly_heatmap <- TRUE",
+        ]:
+            with self.subTest(active_switch=active_switch):
+                self.assertIn(active_switch, visualization_script)
+
+        for inactive_switch in [
+            "draw_aspect_summary_figures <- FALSE",
+            "draw_quarterly_distribution <- FALSE",
+            "draw_drift_monitor <- FALSE",
+        ]:
+            with self.subTest(inactive_switch=inactive_switch):
+                self.assertIn(inactive_switch, visualization_script)
+
+        for skip_message in [
+            "Skipping aspect mean and low-score-share figures because they are not in the selected figure set.",
+            "Skipping sentiment_drift_monitor.png because it is not in the selected figure set.",
+            "Skipping sentiment_trend_quarterly.png because it is not in the selected figure set.",
+            "Skipping sentiment_drift_monitor_id.png because it is not in the selected figure set.",
+            "Skipping sentiment_trend_quarterly_id.png because it is not in the selected figure set.",
+        ]:
+            with self.subTest(skip_message=skip_message):
+                self.assertIn(skip_message, visualization_script)
+
+        self.assertIn("draw_aspect_text_figures <- FALSE", aspect_text_script)
+        self.assertIn(
+            "Skipping aspect-text figures because they are not in the selected figure set.",
+            aspect_text_script,
+        )
+
+        for notebook_path in ["04_visualization.ipynb", "Colab_Master_TripAdvisor.ipynb"]:
+            with self.subTest(notebook_path=notebook_path):
+                notebook = (PROJECT_ROOT / notebook_path).read_text()
+                self.assertIn("draw_sentiment_distribution <- TRUE", notebook)
+                self.assertIn("draw_monthly_heatmap <- TRUE", notebook)
+                self.assertIn("draw_quarterly_distribution <- FALSE", notebook)
+
+        colab_notebook = (PROJECT_ROOT / "Colab_Master_TripAdvisor.ipynb").read_text()
+        self.assertIn("draw_aspect_text_figures <- FALSE", colab_notebook)
+
     def test_notebook_updater_appends_extra_script_blocks(self):
         updater = (PROJECT_ROOT / "scripts" / "update_notebooks_eli5.R").read_text()
         self.assertIn("append_missing_code_cells", updater)
@@ -1779,6 +1846,7 @@ class DataWiringTests(unittest.TestCase):
         script = (PROJECT_ROOT / "04_visualization.R").read_text()
         self.assertIn("Annual Review Profile", script)
         self.assertIn("annual_review_profile_path", script)
+        self.assertIn("reviewer_country", script)
         self.assertIn("reviewer_location", script)
         self.assertIn("regions_with_minimum_reviews", script)
         self.assertIn("rating_5_star_reviews", script)
@@ -1792,9 +1860,11 @@ class DataWiringTests(unittest.TestCase):
         self.assertTrue(rows)
         self.assertEqual(rows[-1]["year"], "Total")
         self.assertEqual(rows[-1]["review_count"], "762")
+        self.assertEqual(rows[-1]["geography_source"], "Source column: reviewer_country")
         self.assertEqual(rows[-1]["rating_5_star_reviews"], "596")
         self.assertEqual(rows[-1]["rating_1_star_reviews"], "29")
-        self.assertIn("Singapore, Singapore", rows[-1]["regions_with_minimum_reviews"])
+        self.assertIn("United States", rows[-1]["regions_with_minimum_reviews"])
+        self.assertNotIn("Singapore, Singapore", rows[-1]["regions_with_minimum_reviews"])
 
     def test_aspect_text_analysis_links_aspects_to_review_text(self):
         script = (PROJECT_ROOT / "05_aspect_text_analysis.R").read_text()

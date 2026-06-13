@@ -72,7 +72,7 @@ theme_premium <- function() {
 
 # RStudio has an interactive Plots pane, but Rscript runs without one.
 # This helper only prints charts when a person is using R interactively.
-# The charts are still saved as PNG files by ggsave() in every run.
+# Enabled charts are still saved as PNG files by ggsave().
 show_plot_for_interactive_use <- function(plot_object) {
   if (interactive()) {
     print(plot_object)
@@ -649,6 +649,14 @@ write_csv(
   file.path(reports_dir, "aspect_qualitative_examples.csv")
 )
 
+# The paper currently keeps only the figures selected by the user in
+# 04_visualization.R. The charts below are useful for future aspect-text work,
+# but they are not part of that selected figure set. Keep this FALSE so the
+# code remains available without regenerating these extra PNG files.
+draw_aspect_text_figures <- FALSE
+
+if (draw_aspect_text_figures) {
+
 # =====================================================================
 # STEP 7: Visualize Aspect Text Results
 # =====================================================================
@@ -1182,6 +1190,10 @@ if (nrow(mismatch_counts_id) > 0) {
   )
 }
 
+} else {
+  cat("Skipping aspect-text figures because they are not in the selected figure set.\n")
+}
+
 cat("Aspect text analysis complete!\n")
 cat("- ", file.path(reports_dir, "aspect_text_alignment.csv"), "\n", sep = "")
 cat("- ", file.path(reports_dir, "aspect_text_band_summary.csv"), "\n", sep = "")
@@ -1189,8 +1201,10 @@ cat("- ", file.path(reports_dir, "aspect_text_key_terms.csv"), "\n", sep = "")
 cat("- ", file.path(reports_dir, "aspect_text_key_phrases.csv"), "\n", sep = "")
 cat("- ", file.path(reports_dir, "aspect_text_mismatches.csv"), "\n", sep = "")
 cat("- ", file.path(reports_dir, "aspect_qualitative_examples.csv"), "\n", sep = "")
-cat("- ", file.path(figures_dir, "aspect_sentiment_by_rating_boxplot.png"), "\n", sep = "")
-cat("- ", file.path(figures_dir, "aspect_low_score_key_terms.png"), "\n", sep = "")
-cat("- ", file.path(figures_dir, "aspect_low_score_key_phrases.png"), "\n", sep = "")
-cat("- ", file.path(figures_dir, "aspect_negative_term_heatmap.png"), "\n", sep = "")
-cat("- ", file.path(figures_dir, "aspect_text_mismatch_counts.png"), "\n", sep = "")
+if (draw_aspect_text_figures) {
+  cat("- ", file.path(figures_dir, "aspect_sentiment_by_rating_boxplot.png"), "\n", sep = "")
+  cat("- ", file.path(figures_dir, "aspect_low_score_key_terms.png"), "\n", sep = "")
+  cat("- ", file.path(figures_dir, "aspect_low_score_key_phrases.png"), "\n", sep = "")
+  cat("- ", file.path(figures_dir, "aspect_negative_term_heatmap.png"), "\n", sep = "")
+  cat("- ", file.path(figures_dir, "aspect_text_mismatch_counts.png"), "\n", sep = "")
+}

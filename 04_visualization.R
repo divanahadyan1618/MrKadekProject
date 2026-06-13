@@ -40,6 +40,17 @@ dir.create(reports_dir, recursive = TRUE, showWarnings = FALSE)
 
 cat("Data and drawing tools loaded successfully!\n")
 
+# The current paper keeps a selected set of visuals. These switches make that
+# selection explicit so a reader can see which chart sections are active.
+# TRUE means "draw and save this PNG"; FALSE means "keep the code available, but
+# skip drawing it in the current workflow."
+draw_sentiment_distribution <- TRUE
+draw_aspect_summary_figures <- FALSE
+draw_aspect_yearly_heatmap <- TRUE
+draw_monthly_heatmap <- TRUE
+draw_quarterly_distribution <- FALSE
+draw_drift_monitor <- FALSE
+
 # =====================================================================
 # STEP 2: Create a Custom "Theme" (Paintbrush)
 # =====================================================================
@@ -61,7 +72,7 @@ theme_premium <- function() {
 
 # RStudio has an interactive Plots pane, but Rscript runs without one.
 # This helper only prints charts when a person is using R interactively.
-# The charts are still saved as PNG files by ggsave() in every run.
+# Enabled charts are still saved as PNG files by ggsave().
 show_plot_for_interactive_use <- function(plot_object) {
   if (interactive()) {
     print(plot_object)
@@ -182,32 +193,37 @@ clear_aspect_outputs <- function() {
 sentiment_counts <- research_data %>%
   count(sentiment_category, name = "review_count")
 
-# We use 'ggplot' to draw the chart.
-# Think of 'aes' (aesthetics) as telling the computer where to put the data.
-# x = sentiment_category means "Put Positive, Neutral, and Negative on the bottom X axis".
-# y = review_count means "Make each bar as tall as the number of reviews in that category".
-# fill = sentiment_category means "Color them based on their category".
+# This chart is part of the selected figure set, so it is drawn by default.
+if (draw_sentiment_distribution) {
+  # We use 'ggplot' to draw the chart.
+  # Think of 'aes' (aesthetics) as telling the computer where to put the data.
+  # x = sentiment_category means "Put Positive, Neutral, and Negative on the bottom X axis".
+  # y = review_count means "Make each bar as tall as the number of reviews in that category".
+  # fill = sentiment_category means "Color them based on their category".
 
-p1 <- ggplot(sentiment_counts, aes(x = sentiment_category, y = review_count, fill = sentiment_category)) +
-  geom_col(width = 0.6, alpha = 0.85) + # Draw solid bars (alpha makes them slightly transparent)
-  geom_text(aes(label = review_count), vjust = -0.4, fontface = "bold", color = "#2C3E50") +
-  # scale_fill_manual lets us pick the exact paint colors. Green = Good, Red = Bad, Grey = Neutral.
-  scale_fill_manual(values = c("Positive" = "#16A085", "Negative" = "#E74C3C", "Neutral" = "#95A5A6")) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
-  # 'labs' stands for labels. We give our chart a title.
-  labs(
-    title = "Sentiment Distribution of TripAdvisor Reviews",
-    subtitle = "Bvlgari Resort Bali guest opinions from the prepared TripAdvisor review dataset",
-    x = "Sentiment Category",
-    y = "Number of Reviews"
-  ) +
-  theme_premium() # Apply our custom paintbrush from Step 2!
+  p1 <- ggplot(sentiment_counts, aes(x = sentiment_category, y = review_count, fill = sentiment_category)) +
+    geom_col(width = 0.6, alpha = 0.85) + # Draw solid bars (alpha makes them slightly transparent)
+    geom_text(aes(label = review_count), vjust = -0.4, fontface = "bold", color = "#2C3E50") +
+    # scale_fill_manual lets us pick the exact paint colors. Green = Good, Red = Bad, Grey = Neutral.
+    scale_fill_manual(values = c("Positive" = "#16A085", "Negative" = "#E74C3C", "Neutral" = "#95A5A6")) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+    # 'labs' stands for labels. We give our chart a title.
+    labs(
+      title = "Sentiment Distribution of TripAdvisor Reviews",
+      subtitle = "Bvlgari Resort Bali guest opinions from the prepared TripAdvisor review dataset",
+      x = "Sentiment Category",
+      y = "Number of Reviews"
+    ) +
+    theme_premium() # Apply our custom paintbrush from Step 2!
 
-# Show the chart in RStudio, but do not open a PDF device during Rscript runs.
-show_plot_for_interactive_use(p1)
+  # Show the chart in RStudio, but do not open a PDF device during Rscript runs.
+  show_plot_for_interactive_use(p1)
 
-# 'ggsave' saves the picture to our computer folder as a PNG image file.
-ggsave(file.path(figures_dir, "sentiment_distribution.png"), plot = p1, width = 7, height = 5, dpi = 300)
+  # 'ggsave' saves the picture to our computer folder as a PNG image file.
+  ggsave(file.path(figures_dir, "sentiment_distribution.png"), plot = p1, width = 7, height = 5, dpi = 300)
+} else {
+  cat("Skipping sentiment_distribution.png because it is not in the selected figure set.\n")
+}
 
 # ---------------------------------------------------------------------
 # Extra Chart: Compare Star Ratings with Text Sentiment
@@ -323,14 +339,14 @@ ggsave(file.path(figures_dir, "sentiment_by_rating_boxplot.png"), plot = p1b, wi
 # ---------------------------------------------------------------------
 # The reference article includes an annual profile table with three ideas:
 # time, reviewer geography, and rating distribution. This project can fully
-# summarize time and ratings. When reviewer_location is present, it is used only
-# as an aggregate region field, not as a person-level identifier.
+# summarize time and ratings. When reviewer_country is present, it is preferred
+# for aggregate geography so city-country variants count together.
 minimum_reviews_for_region_listing <- 2
 maximum_regions_listed_per_year <- 4
 possible_geography_columns <- c(
+  "reviewer_country",
   "reviewer_location",
   "reviewer_region",
-  "reviewer_country",
   "guest_region",
   "guest_country",
   "origin_region",
@@ -346,14 +362,21 @@ if (length(available_geography_columns) > 0) {
   available_geography_column <- NA_character_
   geography_source_label <- "No non-identifying reviewer geography field in prepared dataset"
 }
+using_reviewer_country <- identical(available_geography_column, "reviewer_country")
+geography_label_en <- if (using_reviewer_country) "Reviewer Country" else "Reviewer Region"
+geography_label_id <- if (using_reviewer_country) "Negara Pengulas" else "Region Pengulas"
+geography_group_noun_en <- if (using_reviewer_country) "country" else "region"
+geography_group_noun_id <- if (using_reviewer_country) "negara" else "region"
+geography_output_column <- if (using_reviewer_country) "country" else "region"
 
 # ---------------------------------------------------------------------
-# Extra Chart: Median Text Sentiment by Reviewer Region
+# Extra Chart: Median Text Sentiment by Reviewer Geography
 # ---------------------------------------------------------------------
-# The students asked for a bar chart that compares sentiment by region.
+# The students asked for a bar chart that compares sentiment by geography.
 # We use the median, not the average, because review sentiment has outliers:
 # one very angry or very enthusiastic review can pull an average up or down.
-# The median is the middle review in a region, so it gives a steadier picture.
+# The median is the middle review in a geography group, so it gives a steadier
+# picture.
 #
 # We also use the length-normalized AFINN score. Raw AFINN is a summed score,
 # so longer reviews can look more positive or negative simply because they use
@@ -373,12 +396,12 @@ if (is.na(available_geography_column)) {
   )
   save_placeholder_plot(
     basename(sentiment_by_region_plot_path),
-    "Median Sentiment Score by Reviewer Region",
+    paste("Median Sentiment Score by", geography_label_en),
     "No non-identifying reviewer geography field is available in the prepared dataset."
   )
   save_placeholder_plot(
     basename(sentiment_by_region_plot_id_path),
-    "Skor Sentimen Median menurut Region Pengulas",
+    paste("Skor Sentimen Median menurut", geography_label_id),
     "Tidak ada kolom geografi pengulas non-identifikasi dalam dataset yang disiapkan."
   )
 } else {
@@ -409,23 +432,29 @@ if (is.na(available_geography_column)) {
     ) %>%
     arrange(desc(median_afinn_per_median_review), desc(review_count), region)
 
-  write_csv(sentiment_by_region, sentiment_by_region_summary_path)
+  sentiment_by_region_for_output <- sentiment_by_region
+  names(sentiment_by_region_for_output)[names(sentiment_by_region_for_output) == "region"] <- geography_output_column
+  write_csv(sentiment_by_region_for_output, sentiment_by_region_summary_path)
 
   if (nrow(sentiment_by_region) == 0) {
     save_placeholder_plot(
       basename(sentiment_by_region_plot_path),
-      "Median Sentiment Score by Reviewer Region",
+      paste("Median Sentiment Score by", geography_label_en),
       paste0(
-        "No reviewer region had at least ",
+        "No reviewer ",
+        geography_group_noun_en,
+        " had at least ",
         minimum_reviews_for_region_sentiment,
         " reviews with sentiment scores."
       )
     )
     save_placeholder_plot(
       basename(sentiment_by_region_plot_id_path),
-      "Skor Sentimen Median menurut Region Pengulas",
+      paste("Skor Sentimen Median menurut", geography_label_id),
       paste0(
-        "Tidak ada region pengulas dengan sedikitnya ",
+        "Tidak ada ",
+        geography_group_noun_id,
+        " pengulas dengan sedikitnya ",
         minimum_reviews_for_region_sentiment,
         " ulasan yang memiliki skor sentimen."
       )
@@ -452,14 +481,16 @@ if (is.na(available_geography_column)) {
       coord_flip() +
       scale_y_continuous(expand = expansion(mult = c(0.02, 0.16))) +
       labs(
-        title = "Median Sentiment Score by Reviewer Region",
+        title = paste("Median Sentiment Score by", geography_label_en),
         subtitle = paste0(
           "Bars use AFINN scores normalized to the median review length\n",
-          "Only regions with at least ",
+          "Only ",
+          geography_group_noun_en,
+          " groups with at least ",
           minimum_reviews_for_region_sentiment,
           " reviews are shown; Unknown locations are excluded"
         ),
-        x = "Reviewer Region",
+        x = geography_label_en,
         y = "Median AFINN Score per Median-Length Review"
       ) +
       theme_premium()
@@ -485,14 +516,16 @@ if (is.na(available_geography_column)) {
       coord_flip() +
       scale_y_continuous(expand = expansion(mult = c(0.02, 0.16))) +
       labs(
-        title = "Skor Sentimen Median menurut Region Pengulas",
+        title = paste("Skor Sentimen Median menurut", geography_label_id),
         subtitle = paste0(
           "Batang menggunakan skor AFINN yang dinormalisasi ke panjang ulasan median\n",
-          "Hanya region dengan sedikitnya ",
+          "Hanya ",
+          geography_group_noun_id,
+          " dengan sedikitnya ",
           minimum_reviews_for_region_sentiment,
           " ulasan yang ditampilkan; lokasi tanpa keterangan dikeluarkan"
         ),
-        x = "Region Pengulas",
+        x = geography_label_id,
         y = "Skor AFINN median (dinormalisasi)"
       ) +
       theme_premium()
@@ -527,10 +560,10 @@ build_rating_distribution <- function(data) {
     select(year, all_of(rating_columns))
 }
 
-# This helper lists the most common reviewer locations that appear at least
-# twice in the same year. Missing locations are labeled "Unknown" so the table
-# is honest about incomplete geography coverage. The list is capped because a
-# long free-text location column can otherwise make the report unreadable.
+# This helper lists the most common reviewer geography groups that appear at
+# least twice in the same year. With the current data, this means normalized
+# reviewer countries. Missing geography is labeled "Unknown" so the table is
+# honest about incomplete coverage.
 build_region_summary <- function(data) {
   if (is.na(available_geography_column)) {
     return(
@@ -556,7 +589,7 @@ build_region_summary <- function(data) {
   if (nrow(region_counts) == 0) {
     return(
       all_years %>%
-        mutate(regions_with_minimum_reviews = "No region reached the minimum review count")
+        mutate(regions_with_minimum_reviews = paste("No", geography_group_noun_en, "reached the minimum review count"))
     )
   }
 
@@ -575,7 +608,7 @@ build_region_summary <- function(data) {
     mutate(
       regions_with_minimum_reviews = if_else(
         omitted_region_count > 0,
-        paste0(listed_regions, ", plus ", omitted_region_count, " other locations"),
+        paste0(listed_regions, ", plus ", omitted_region_count, " other ", geography_group_noun_en, " groups"),
         listed_regions
       )
     ) %>%
@@ -584,7 +617,7 @@ build_region_summary <- function(data) {
     mutate(
       regions_with_minimum_reviews = replace_na(
         regions_with_minimum_reviews,
-        "No region reached the minimum review count"
+        paste("No", geography_group_noun_en, "reached the minimum review count")
       )
     )
 }
@@ -805,62 +838,68 @@ if (length(available_aspect_columns) > 0) {
     "Sleep quality" = "#F4A261"
   )
 
-  # Chart 1: show which aspect has the highest or lowest average rating.
-  p_aspect_mean <- ggplot(
-    aspect_summary,
-    aes(x = reorder(aspect_label, mean_rating), y = mean_rating, fill = aspect_label)
-  ) +
-    geom_col(width = 0.68, alpha = 0.88) +
-    geom_text(
-      aes(label = paste0(round(mean_rating, 2), " / 5\nn=", reviews_with_rating)),
-      hjust = -0.08,
-      fontface = "bold",
-      color = "#2C3E50",
-      size = 3
+  # These two aspect-summary bar charts are useful exploratory charts, but they
+  # are not in the selected figure set.
+  if (draw_aspect_summary_figures) {
+    # Chart 1: show which aspect has the highest or lowest average rating.
+    p_aspect_mean <- ggplot(
+      aspect_summary,
+      aes(x = reorder(aspect_label, mean_rating), y = mean_rating, fill = aspect_label)
     ) +
-    coord_flip() +
-    scale_fill_manual(values = aspect_colors) +
-    scale_y_continuous(limits = c(0, 5), expand = expansion(mult = c(0, 0.18))) +
-    labs(
-      title = "Average Guest Experience Aspect Ratings",
-      subtitle = "Structured TripAdvisor aspect scores show which experience dimensions are strongest or weakest",
-      x = "Aspect",
-      y = "Average rating"
+      geom_col(width = 0.68, alpha = 0.88) +
+      geom_text(
+        aes(label = paste0(round(mean_rating, 2), " / 5\nn=", reviews_with_rating)),
+        hjust = -0.08,
+        fontface = "bold",
+        color = "#2C3E50",
+        size = 3
+      ) +
+      coord_flip() +
+      scale_fill_manual(values = aspect_colors) +
+      scale_y_continuous(limits = c(0, 5), expand = expansion(mult = c(0, 0.18))) +
+      labs(
+        title = "Average Guest Experience Aspect Ratings",
+        subtitle = "Structured TripAdvisor aspect scores show which experience dimensions are strongest or weakest",
+        x = "Aspect",
+        y = "Average rating"
+      ) +
+      theme_premium()
+
+    show_plot_for_interactive_use(p_aspect_mean)
+
+    ggsave(file.path(figures_dir, "aspect_mean_ratings.png"), plot = p_aspect_mean, width = 8.5, height = 5.4, dpi = 300)
+
+    # Chart 2: show where low scores are concentrated. This can reveal a problem
+    # even if the average rating is still high.
+    p_aspect_low <- ggplot(
+      aspect_summary,
+      aes(x = reorder(aspect_label, low_score_share), y = low_score_share, fill = aspect_label)
     ) +
-    theme_premium()
+      geom_col(width = 0.68, alpha = 0.88) +
+      geom_text(
+        aes(label = paste0(scales::percent(low_score_share, accuracy = 0.1), "\nn=", low_score_count)),
+        hjust = -0.08,
+        fontface = "bold",
+        color = "#2C3E50",
+        size = 3
+      ) +
+      coord_flip() +
+      scale_fill_manual(values = aspect_colors) +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.18))) +
+      labs(
+        title = "Low-Score Share by Guest Experience Aspect",
+        subtitle = "Low-score share counts aspect ratings from 1 to 3 stars",
+        x = "Aspect",
+        y = "Share of aspect ratings at 1-3 stars"
+      ) +
+      theme_premium()
 
-  show_plot_for_interactive_use(p_aspect_mean)
+    show_plot_for_interactive_use(p_aspect_low)
 
-  ggsave(file.path(figures_dir, "aspect_mean_ratings.png"), plot = p_aspect_mean, width = 8.5, height = 5.4, dpi = 300)
-
-  # Chart 2: show where low scores are concentrated. This can reveal a problem
-  # even if the average rating is still high.
-  p_aspect_low <- ggplot(
-    aspect_summary,
-    aes(x = reorder(aspect_label, low_score_share), y = low_score_share, fill = aspect_label)
-  ) +
-    geom_col(width = 0.68, alpha = 0.88) +
-    geom_text(
-      aes(label = paste0(scales::percent(low_score_share, accuracy = 0.1), "\nn=", low_score_count)),
-      hjust = -0.08,
-      fontface = "bold",
-      color = "#2C3E50",
-      size = 3
-    ) +
-    coord_flip() +
-    scale_fill_manual(values = aspect_colors) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.18))) +
-    labs(
-      title = "Low-Score Share by Guest Experience Aspect",
-      subtitle = "Low-score share counts aspect ratings from 1 to 3 stars",
-      x = "Aspect",
-      y = "Share of aspect ratings at 1-3 stars"
-    ) +
-    theme_premium()
-
-  show_plot_for_interactive_use(p_aspect_low)
-
-  ggsave(file.path(figures_dir, "aspect_low_score_share.png"), plot = p_aspect_low, width = 8.5, height = 5.4, dpi = 300)
+    ggsave(file.path(figures_dir, "aspect_low_score_share.png"), plot = p_aspect_low, width = 8.5, height = 5.4, dpi = 300)
+  } else {
+    cat("Skipping aspect mean and low-score-share figures because they are not in the selected figure set.\n")
+  }
 
   # Chart 3: summarize aspect ratings by year. Years with very few ratings are
   # colored grey because tiny sample sizes should not be over-interpreted.
@@ -882,33 +921,38 @@ if (length(available_aspect_columns) > 0) {
       )
     )
 
-  p_aspect_heatmap <- ggplot(aspect_yearly, aes(x = aspect_label, y = year_label, fill = rating_for_fill)) +
-    geom_tile(color = "white", linewidth = 0.4) +
-    geom_text(aes(label = heatmap_label), size = 2.3, color = "#2C3E50", lineheight = 0.85) +
-    scale_fill_gradient2(
-      low = "#E76F51",
-      mid = "#F7F9F9",
-      high = "#2A9D8F",
-      midpoint = 4,
-      limits = c(1, 5),
-      na.value = "#ECEFF1",
-      name = "Average\nrating"
-    ) +
-    labs(
-      title = "Yearly Aspect Rating Heatmap",
-      subtitle = "Grey tiles have fewer than 5 aspect ratings; labels show average rating and n when enough data exists",
-      x = "Aspect",
-      y = "Year"
-    ) +
-    theme_premium() +
-    theme(
-      legend.position = "right",
-      axis.text.x = element_text(angle = 35, hjust = 1)
-    )
+  # The yearly aspect heatmap is part of the selected figure set.
+  if (draw_aspect_yearly_heatmap) {
+    p_aspect_heatmap <- ggplot(aspect_yearly, aes(x = aspect_label, y = year_label, fill = rating_for_fill)) +
+      geom_tile(color = "white", linewidth = 0.4) +
+      geom_text(aes(label = heatmap_label), size = 2.3, color = "#2C3E50", lineheight = 0.85) +
+      scale_fill_gradient2(
+        low = "#E76F51",
+        mid = "#F7F9F9",
+        high = "#2A9D8F",
+        midpoint = 4,
+        limits = c(1, 5),
+        na.value = "#ECEFF1",
+        name = "Average\nrating"
+      ) +
+      labs(
+        title = "Yearly Aspect Rating Heatmap",
+        subtitle = "Grey tiles have fewer than 5 aspect ratings; labels show average rating and n when enough data exists",
+        x = "Aspect",
+        y = "Year"
+      ) +
+      theme_premium() +
+      theme(
+        legend.position = "right",
+        axis.text.x = element_text(angle = 35, hjust = 1)
+      )
 
-  show_plot_for_interactive_use(p_aspect_heatmap)
+    show_plot_for_interactive_use(p_aspect_heatmap)
 
-  ggsave(file.path(figures_dir, "aspect_yearly_rating_heatmap.png"), plot = p_aspect_heatmap, width = 10, height = 7, dpi = 300)
+    ggsave(file.path(figures_dir, "aspect_yearly_rating_heatmap.png"), plot = p_aspect_heatmap, width = 10, height = 7, dpi = 300)
+  } else {
+    cat("Skipping aspect_yearly_rating_heatmap.png because it is not in the selected figure set.\n")
+  }
 
     cat("Aspect rating analysis complete!\n")
     cat("- ", file.path(reports_dir, "aspect_rating_summary.csv"), "\n", sep = "")
@@ -1534,39 +1578,45 @@ month_stat_labels <- month_averages %>%
 quarter_breaks <- quarter_averages$quarter_index[seq(1, nrow(quarter_averages), by = 4)]
 quarter_labels <- quarter_averages$quarter_label[seq(1, nrow(quarter_averages), by = 4)]
 
-# Monthly heatmap for a compact month-by-year overview.
-# In this chart:
-# - Rows are years.
-# - Columns are months.
-# - Darker green means a higher average sentiment score.
-# - Pale or red cells mean lower sentiment.
-# - The text inside each cell shows the average score and number of reviews.
-p4_heatmap <- ggplot(month_averages, aes(x = month_name, y = year_label, fill = period_avg)) +
-  geom_tile(color = "white", linewidth = 0.4) +
-  geom_text(aes(label = heatmap_label), size = 2.1, color = "#2C3E50", lineheight = 0.85) +
-  scale_fill_gradient2(
-    low = "#C0392B",
-    mid = "#F7F9F9",
-    high = "#16A085",
-    midpoint = 0,
-    name = "Average\nAFINN per\nmedian-length review",
-    na.value = "#F4F6F7"
-  ) +
-  labs(
-    title = "Monthly Sentiment Heatmap (AFINN per Median-Length Review)",
-    subtitle = "Each tile shows monthly average length-normalized sentiment and review count",
-    x = "Month",
-    y = "Year"
-  ) +
-  theme_premium() +
-  theme(
-    legend.position = "right",
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
+# The monthly heatmap is part of the selected figure set, so it is drawn by
+# default.
+if (draw_monthly_heatmap) {
+  # Monthly heatmap for a compact month-by-year overview.
+  # In this chart:
+  # - Rows are years.
+  # - Columns are months.
+  # - Darker green means a higher average sentiment score.
+  # - Pale or red cells mean lower sentiment.
+  # - The text inside each cell shows the average score and number of reviews.
+  p4_heatmap <- ggplot(month_averages, aes(x = month_name, y = year_label, fill = period_avg)) +
+    geom_tile(color = "white", linewidth = 0.4) +
+    geom_text(aes(label = heatmap_label), size = 2.1, color = "#2C3E50", lineheight = 0.85) +
+    scale_fill_gradient2(
+      low = "#C0392B",
+      mid = "#F7F9F9",
+      high = "#16A085",
+      midpoint = 0,
+      name = "Average\nAFINN per\nmedian-length review",
+      na.value = "#F4F6F7"
+    ) +
+    labs(
+      title = "Monthly Sentiment Heatmap (AFINN per Median-Length Review)",
+      subtitle = "Each tile shows monthly average length-normalized sentiment and review count",
+      x = "Month",
+      y = "Year"
+    ) +
+    theme_premium() +
+    theme(
+      legend.position = "right",
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
 
-show_plot_for_interactive_use(p4_heatmap)
+  show_plot_for_interactive_use(p4_heatmap)
 
-ggsave(file.path(figures_dir, "sentiment_trend_monthly_heatmap.png"), plot = p4_heatmap, width = 10, height = 8, dpi = 300)
+  ggsave(file.path(figures_dir, "sentiment_trend_monthly_heatmap.png"), plot = p4_heatmap, width = 10, height = 8, dpi = 300)
+} else {
+  cat("Skipping sentiment_trend_monthly_heatmap.png because it is not in the selected figure set.\n")
+}
 
 # Monthly rolling chart for the trend story.
 # This chart is better than 189 tiny monthly boxplots because many months have
@@ -1633,7 +1683,8 @@ show_plot_for_interactive_use(p4_rolling)
 
 ggsave(file.path(figures_dir, "sentiment_trend_monthly_rolling.png"), plot = p4_rolling, width = 10, height = 5.5, dpi = 300)
 
-# Monthly robust drift monitor. This chart saves output/figures/sentiment_drift_monitor.png.
+# Monthly robust drift monitor. When enabled, this chart saves
+# output/figures/sentiment_drift_monitor.png.
 # It views each month's median sentiment
 # against only the reviews that came before that month. A value near 0 means the
 # month looks typical. A value below -2 means it is unusually low by a robust
@@ -1641,84 +1692,92 @@ ggsave(file.path(figures_dir, "sentiment_trend_monthly_rolling.png"), plot = p4_
 monthly_drift_monitor <- sentiment_period_summary %>%
   filter(period_type == "month", !is.na(robust_z_afinn_median))
 
-if (nrow(monthly_drift_monitor) > 0) {
-  p4_drift <- ggplot(
-    monthly_drift_monitor,
-    aes(x = period_start, y = robust_z_afinn_median)
-  ) +
-    geom_hline(yintercept = 0, color = "#7F8C8D", linewidth = 0.45) +
-    geom_hline(yintercept = -2, color = "#C0392B", linetype = "dashed", linewidth = 0.8) +
-    geom_col(aes(fill = any_drift_flag), width = 24, alpha = 0.76) +
-    geom_point(aes(size = review_count), color = "#2C3E50", alpha = 0.82) +
-    scale_fill_manual(values = c("FALSE" = "#7FB3D5", "TRUE" = "#C0392B")) +
-    scale_size_continuous(range = c(1.8, 5.2)) +
-    scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
-    labs(
-      title = "Monthly Sentiment Drift Monitor",
-      subtitle = "Monthly median AFINN compared with prior reviews using historical median and MAD",
-      x = "Review month",
-      y = "Robust z-score"
+if (draw_drift_monitor) {
+  if (nrow(monthly_drift_monitor) > 0) {
+    p4_drift <- ggplot(
+      monthly_drift_monitor,
+      aes(x = period_start, y = robust_z_afinn_median)
     ) +
-    theme_premium() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+      geom_hline(yintercept = 0, color = "#7F8C8D", linewidth = 0.45) +
+      geom_hline(yintercept = -2, color = "#C0392B", linetype = "dashed", linewidth = 0.8) +
+      geom_col(aes(fill = any_drift_flag), width = 24, alpha = 0.76) +
+      geom_point(aes(size = review_count), color = "#2C3E50", alpha = 0.82) +
+      scale_fill_manual(values = c("FALSE" = "#7FB3D5", "TRUE" = "#C0392B")) +
+      scale_size_continuous(range = c(1.8, 5.2)) +
+      scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+      labs(
+        title = "Monthly Sentiment Drift Monitor",
+        subtitle = "Monthly median AFINN compared with prior reviews using historical median and MAD",
+        x = "Review month",
+        y = "Robust z-score"
+      ) +
+      theme_premium() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-  show_plot_for_interactive_use(p4_drift)
-  ggsave(sentiment_drift_monitor_path, plot = p4_drift, width = 10, height = 5.5, dpi = 300)
+    show_plot_for_interactive_use(p4_drift)
+    ggsave(sentiment_drift_monitor_path, plot = p4_drift, width = 10, height = 5.5, dpi = 300)
+  } else {
+    save_placeholder_plot(
+      basename(sentiment_drift_monitor_path),
+      "Monthly Sentiment Drift Monitor",
+      "There are not enough historical reviews to calculate robust drift scores yet.",
+      width = 10,
+      height = 5.5
+    )
+  }
 } else {
-  save_placeholder_plot(
-    basename(sentiment_drift_monitor_path),
-    "Monthly Sentiment Drift Monitor",
-    "There are not enough historical reviews to calculate robust drift scores yet.",
-    width = 10,
-    height = 5.5
-  )
+  cat("Skipping sentiment_drift_monitor.png because it is not in the selected figure set.\n")
 }
 
 # Quarterly boxplot for quarter-level statistics.
 # A quarterly boxplot groups all reviews from the same quarter together.
-# This is useful because quarters usually have more reviews than single months,
-# so the distribution is more meaningful.
-p5 <- ggplot(trend_reviews, aes(x = quarter_index, y = score_afinn, group = quarter_index)) +
-  geom_boxplot(fill = "#D5F5E3", color = "#1E8449", alpha = 0.85, outlier.alpha = 0.35) +
-  geom_point(
-    data = quarter_averages,
-    aes(x = quarter_index, y = period_avg),
-    shape = 23,
-    size = 2.8,
-    fill = "#C0392B",
-    color = "white",
-    inherit.aes = FALSE
-  ) +
-  geom_line(
-    data = filter(quarter_averages, !is.na(prior_avg)),
-    aes(x = quarter_index, y = prior_avg),
-    color = "#7F8C8D",
-    linetype = "dotted",
-    linewidth = 1,
-    inherit.aes = FALSE
-  ) +
-  geom_text(
-    data = quarter_averages,
-    aes(x = quarter_index, y = stats_label_y, label = stats_label),
-    angle = 90,
-    hjust = 0.5,
-    size = 1.9,
-    color = "#34495E",
-    inherit.aes = FALSE
-  ) +
-  scale_x_continuous(breaks = quarter_breaks, labels = quarter_labels) +
-  scale_y_continuous(limits = c(stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
-  labs(
-    title = "Quarterly Sentiment Distribution (AFINN per Median-Length Review)",
-    subtitle = "Each box summarizes one quarter; labels show quarter avg and n; dotted line shows the average before each quarter",
-    x = "Quarter",
-    y = "AFINN per median-length review"
-  ) +
-  theme_premium() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
+# This is useful for exploration, but the corrected selected figure set uses the
+# monthly rolling chart, monthly heatmap, and yearly distribution instead.
+if (draw_quarterly_distribution) {
+  p5 <- ggplot(trend_reviews, aes(x = quarter_index, y = score_afinn, group = quarter_index)) +
+    geom_boxplot(fill = "#D5F5E3", color = "#1E8449", alpha = 0.85, outlier.alpha = 0.35) +
+    geom_point(
+      data = quarter_averages,
+      aes(x = quarter_index, y = period_avg),
+      shape = 23,
+      size = 2.8,
+      fill = "#C0392B",
+      color = "white",
+      inherit.aes = FALSE
+    ) +
+    geom_line(
+      data = filter(quarter_averages, !is.na(prior_avg)),
+      aes(x = quarter_index, y = prior_avg),
+      color = "#7F8C8D",
+      linetype = "dotted",
+      linewidth = 1,
+      inherit.aes = FALSE
+    ) +
+    geom_text(
+      data = quarter_averages,
+      aes(x = quarter_index, y = stats_label_y, label = stats_label),
+      angle = 90,
+      hjust = 0.5,
+      size = 1.9,
+      color = "#34495E",
+      inherit.aes = FALSE
+    ) +
+    scale_x_continuous(breaks = quarter_breaks, labels = quarter_labels) +
+    scale_y_continuous(limits = c(stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
+    labs(
+      title = "Quarterly Sentiment Distribution (AFINN per Median-Length Review)",
+      subtitle = "Each box summarizes one quarter; labels show quarter avg and n; dotted line shows the average before each quarter",
+      x = "Quarter",
+      y = "AFINN per median-length review"
+    ) +
+    theme_premium() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
 
-show_plot_for_interactive_use(p5)
-ggsave(file.path(figures_dir, "sentiment_trend_quarterly.png"), plot = p5, width = 14, height = 6, dpi = 300)
+  show_plot_for_interactive_use(p5)
+  ggsave(file.path(figures_dir, "sentiment_trend_quarterly.png"), plot = p5, width = 14, height = 6, dpi = 300)
+} else {
+  cat("Skipping sentiment_trend_quarterly.png because it is not in the selected figure set.\n")
+}
 
 # Yearly boxplot for year-level statistics.
 # The yearly chart has the most detailed labels because there are only about
@@ -1799,30 +1858,34 @@ make_month_label_id <- function(dates) {
   paste(month_labels_id[lubridate::month(dates)], lubridate::year(dates))
 }
 
-sentiment_counts_id <- sentiment_counts %>%
-  mutate(
-    sentiment_category_id = recode(
-      sentiment_category,
-      "Positive" = "Positif",
-      "Neutral" = "Netral",
-      "Negative" = "Negatif"
-    ),
-    sentiment_category_id = factor(sentiment_category_id, levels = c("Negatif", "Netral", "Positif"))
-  )
+if (draw_sentiment_distribution) {
+  sentiment_counts_id <- sentiment_counts %>%
+    mutate(
+      sentiment_category_id = recode(
+        sentiment_category,
+        "Positive" = "Positif",
+        "Neutral" = "Netral",
+        "Negative" = "Negatif"
+      ),
+      sentiment_category_id = factor(sentiment_category_id, levels = c("Negatif", "Netral", "Positif"))
+    )
 
-p1_id <- ggplot(sentiment_counts_id, aes(x = sentiment_category_id, y = review_count, fill = sentiment_category_id)) +
-  geom_col(width = 0.6, alpha = 0.85) +
-  geom_text(aes(label = review_count), vjust = -0.4, fontface = "bold", color = "#2C3E50") +
-  scale_fill_manual(values = c("Positif" = "#16A085", "Negatif" = "#E74C3C", "Netral" = "#95A5A6")) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
-  labs(
-    title = "Distribusi Sentimen Ulasan TripAdvisor",
-    subtitle = "Opini tamu Bvlgari Resort Bali dari dataset ulasan TripAdvisor yang disiapkan",
-    x = "Kategori Sentimen",
-    y = "Jumlah Ulasan"
-  ) +
-  theme_premium()
-ggsave(file.path(figures_dir, "sentiment_distribution_id.png"), plot = p1_id, width = 7, height = 5, dpi = 300)
+  p1_id <- ggplot(sentiment_counts_id, aes(x = sentiment_category_id, y = review_count, fill = sentiment_category_id)) +
+    geom_col(width = 0.6, alpha = 0.85) +
+    geom_text(aes(label = review_count), vjust = -0.4, fontface = "bold", color = "#2C3E50") +
+    scale_fill_manual(values = c("Positif" = "#16A085", "Negatif" = "#E74C3C", "Netral" = "#95A5A6")) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+    labs(
+      title = "Distribusi Sentimen Ulasan TripAdvisor",
+      subtitle = "Opini tamu Bvlgari Resort Bali dari dataset ulasan TripAdvisor yang disiapkan",
+      x = "Kategori Sentimen",
+      y = "Jumlah Ulasan"
+    ) +
+    theme_premium()
+  ggsave(file.path(figures_dir, "sentiment_distribution_id.png"), plot = p1_id, width = 7, height = 5, dpi = 300)
+} else {
+  cat("Skipping sentiment_distribution_id.png because it is not in the selected figure set.\n")
+}
 
 p1b_id <- ggplot(rating_sentiment, aes(x = rating_number, y = score_afinn, group = rating_number, fill = rating_group)) +
   geom_boxplot(alpha = 0.82, outlier.alpha = 0.35, width = 0.62) +
@@ -1874,43 +1937,45 @@ if (exists("aspect_summary") && isTRUE(has_usable_aspect_ratings)) {
     )
   aspect_colors_id <- setNames(aspect_colors[names(aspect_label_id_lookup)], aspect_label_id_lookup)
 
-  p_aspect_mean_id <- ggplot(
-    aspect_summary_id,
-    aes(x = reorder(aspect_label_id, mean_rating), y = mean_rating, fill = aspect_label_id)
-  ) +
-    geom_col(width = 0.72, alpha = 0.88) +
-    geom_text(aes(label = round(mean_rating, 2)), hjust = -0.15, fontface = "bold", color = "#2C3E50", size = 3.3) +
-    coord_flip() +
-    scale_fill_manual(values = aspect_colors_id) +
-    scale_y_continuous(limits = c(0, 5), expand = expansion(mult = c(0, 0.1))) +
-    labs(
-      title = "Rata-Rata Rating Aspek Pengalaman Tamu",
-      subtitle = "Skor aspek terstruktur TripAdvisor menunjukkan dimensi pengalaman yang paling kuat atau lemah",
-      x = "Aspek",
-      y = "Rating rata-rata"
+  if (draw_aspect_summary_figures) {
+    p_aspect_mean_id <- ggplot(
+      aspect_summary_id,
+      aes(x = reorder(aspect_label_id, mean_rating), y = mean_rating, fill = aspect_label_id)
     ) +
-    theme_premium()
-  ggsave(file.path(figures_dir, "aspect_mean_ratings_id.png"), plot = p_aspect_mean_id, width = 8.5, height = 5.4, dpi = 300)
+      geom_col(width = 0.72, alpha = 0.88) +
+      geom_text(aes(label = round(mean_rating, 2)), hjust = -0.15, fontface = "bold", color = "#2C3E50", size = 3.3) +
+      coord_flip() +
+      scale_fill_manual(values = aspect_colors_id) +
+      scale_y_continuous(limits = c(0, 5), expand = expansion(mult = c(0, 0.1))) +
+      labs(
+        title = "Rata-Rata Rating Aspek Pengalaman Tamu",
+        subtitle = "Skor aspek terstruktur TripAdvisor menunjukkan dimensi pengalaman yang paling kuat atau lemah",
+        x = "Aspek",
+        y = "Rating rata-rata"
+      ) +
+      theme_premium()
+    ggsave(file.path(figures_dir, "aspect_mean_ratings_id.png"), plot = p_aspect_mean_id, width = 8.5, height = 5.4, dpi = 300)
 
-  p_aspect_low_id <- ggplot(
-    aspect_summary_id,
-    aes(x = reorder(aspect_label_id, low_score_share), y = low_score_share, fill = aspect_label_id)
-  ) +
-    geom_col(width = 0.72, alpha = 0.88) +
-    geom_text(aes(label = paste0(scales::percent(low_score_share, accuracy = 0.1), "\nn=", low_score_count)), hjust = -0.12, fontface = "bold", color = "#2C3E50", size = 3) +
-    coord_flip() +
-    scale_fill_manual(values = aspect_colors_id) +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.18))) +
-    labs(
-      title = "Pangsa Skor Rendah menurut Aspek Pengalaman Tamu",
-      subtitle = "Skor rendah menghitung rating aspek dari 1 sampai 3 bintang",
-      x = "Aspek",
-      y = "Pangsa rating aspek 1-3 bintang"
+    p_aspect_low_id <- ggplot(
+      aspect_summary_id,
+      aes(x = reorder(aspect_label_id, low_score_share), y = low_score_share, fill = aspect_label_id)
     ) +
-    theme_premium()
-  ggsave(file.path(figures_dir, "aspect_low_score_share_id.png"), plot = p_aspect_low_id, width = 8.5, height = 5.4, dpi = 300)
+      geom_col(width = 0.72, alpha = 0.88) +
+      geom_text(aes(label = paste0(scales::percent(low_score_share, accuracy = 0.1), "\nn=", low_score_count)), hjust = -0.12, fontface = "bold", color = "#2C3E50", size = 3) +
+      coord_flip() +
+      scale_fill_manual(values = aspect_colors_id) +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.18))) +
+      labs(
+        title = "Pangsa Skor Rendah menurut Aspek Pengalaman Tamu",
+        subtitle = "Skor rendah menghitung rating aspek dari 1 sampai 3 bintang",
+        x = "Aspek",
+        y = "Pangsa rating aspek 1-3 bintang"
+      ) +
+      theme_premium()
+    ggsave(file.path(figures_dir, "aspect_low_score_share_id.png"), plot = p_aspect_low_id, width = 8.5, height = 5.4, dpi = 300)
+  }
 
-  if (exists("aspect_yearly") && nrow(aspect_yearly) > 0) {
+  if (draw_aspect_yearly_heatmap && exists("aspect_yearly") && nrow(aspect_yearly) > 0) {
     aspect_yearly_id <- aspect_yearly %>%
       mutate(
         aspect_label_id = recode(as.character(aspect_label), !!!aspect_label_id_lookup),
@@ -1974,26 +2039,30 @@ month_averages_id <- month_averages %>%
   )
 month_break_labels_id <- make_month_label_id(month_lookup$month_start[seq(1, nrow(month_lookup), by = 6)])
 
-p4_heatmap_id <- ggplot(month_averages_id, aes(x = month_name_id, y = year_label, fill = period_avg)) +
-  geom_tile(color = "white", linewidth = 0.4) +
-  geom_text(aes(label = heatmap_label), size = 2.1, color = "#2C3E50", lineheight = 0.85) +
-  scale_fill_gradient2(
-    low = "#C0392B",
-    mid = "#F7F9F9",
-    high = "#16A085",
-    midpoint = 0,
-    name = "Rata-rata\nAFINN\nternormalisasi",
-    na.value = "#F4F6F7"
-  ) +
-  labs(
-    title = "Heatmap Sentimen Bulanan (AFINN Ternormalisasi)",
-    subtitle = "Setiap sel menunjukkan rata-rata sentimen bulanan yang dinormalisasi dan jumlah ulasan",
-    x = "Bulan",
-    y = "Tahun"
-  ) +
-  theme_premium() +
-  theme(legend.position = "right", axis.text.x = element_text(angle = 45, hjust = 1))
-ggsave(file.path(figures_dir, "sentiment_trend_monthly_heatmap_id.png"), plot = p4_heatmap_id, width = 10, height = 8, dpi = 300)
+if (draw_monthly_heatmap) {
+  p4_heatmap_id <- ggplot(month_averages_id, aes(x = month_name_id, y = year_label, fill = period_avg)) +
+    geom_tile(color = "white", linewidth = 0.4) +
+    geom_text(aes(label = heatmap_label), size = 2.1, color = "#2C3E50", lineheight = 0.85) +
+    scale_fill_gradient2(
+      low = "#C0392B",
+      mid = "#F7F9F9",
+      high = "#16A085",
+      midpoint = 0,
+      name = "Rata-rata\nAFINN\nternormalisasi",
+      na.value = "#F4F6F7"
+    ) +
+    labs(
+      title = "Heatmap Sentimen Bulanan (AFINN Ternormalisasi)",
+      subtitle = "Setiap sel menunjukkan rata-rata sentimen bulanan yang dinormalisasi dan jumlah ulasan",
+      x = "Bulan",
+      y = "Tahun"
+    ) +
+    theme_premium() +
+    theme(legend.position = "right", axis.text.x = element_text(angle = 45, hjust = 1))
+  ggsave(file.path(figures_dir, "sentiment_trend_monthly_heatmap_id.png"), plot = p4_heatmap_id, width = 10, height = 8, dpi = 300)
+} else {
+  cat("Skipping sentiment_trend_monthly_heatmap_id.png because it is not in the selected figure set.\n")
+}
 
 p4_rolling_id <- p4_rolling +
   scale_x_continuous(breaks = month_breaks, labels = month_break_labels_id) +
@@ -2005,43 +2074,51 @@ p4_rolling_id <- p4_rolling +
   )
 ggsave(file.path(figures_dir, "sentiment_trend_monthly_rolling_id.png"), plot = p4_rolling_id, width = 10, height = 5.5, dpi = 300)
 
-if (exists("p4_drift")) {
-  p4_drift_id <- p4_drift +
-    labs(
-      title = "Monitor Pergeseran Sentimen Bulanan",
-      subtitle = "Median AFINN bulanan dibandingkan dengan ulasan sebelumnya menggunakan median historis dan MAD",
-      x = "Bulan ulasan",
-      y = "z-score robust"
+if (draw_drift_monitor) {
+  if (exists("p4_drift")) {
+    p4_drift_id <- p4_drift +
+      labs(
+        title = "Monitor Pergeseran Sentimen Bulanan",
+        subtitle = "Median AFINN bulanan dibandingkan dengan ulasan sebelumnya menggunakan median historis dan MAD",
+        x = "Bulan ulasan",
+        y = "z-score robust"
+      )
+    ggsave(file.path(figures_dir, "sentiment_drift_monitor_id.png"), plot = p4_drift_id, width = 10, height = 5.5, dpi = 300)
+  } else {
+    save_placeholder_plot(
+      "sentiment_drift_monitor_id.png",
+      "Monitor Pergeseran Sentimen Bulanan",
+      "Belum ada cukup ulasan historis untuk menghitung skor drift robust.",
+      width = 10,
+      height = 5.5
     )
-  ggsave(file.path(figures_dir, "sentiment_drift_monitor_id.png"), plot = p4_drift_id, width = 10, height = 5.5, dpi = 300)
+  }
 } else {
-  save_placeholder_plot(
-    "sentiment_drift_monitor_id.png",
-    "Monitor Pergeseran Sentimen Bulanan",
-    "Belum ada cukup ulasan historis untuk menghitung skor drift robust.",
-    width = 10,
-    height = 5.5
-  )
+  cat("Skipping sentiment_drift_monitor_id.png because it is not in the selected figure set.\n")
 }
 
 quarter_averages_id <- quarter_averages %>%
   mutate(stats_label = paste0("rata2 ", round(period_avg, 1), "\nn=", review_count))
-p5_id <- ggplot(trend_reviews, aes(x = quarter_index, y = score_afinn, group = quarter_index)) +
-  geom_boxplot(fill = "#D5F5E3", color = "#1E8449", alpha = 0.85, outlier.alpha = 0.35) +
-  geom_point(data = quarter_averages_id, aes(x = quarter_index, y = period_avg), shape = 23, size = 2.8, fill = "#C0392B", color = "white", inherit.aes = FALSE) +
-  geom_line(data = filter(quarter_averages_id, !is.na(prior_avg)), aes(x = quarter_index, y = prior_avg), color = "#7F8C8D", linetype = "dotted", linewidth = 1, inherit.aes = FALSE) +
-  geom_text(data = quarter_averages_id, aes(x = quarter_index, y = stats_label_y, label = stats_label), angle = 90, hjust = 0.5, size = 1.9, color = "#34495E", inherit.aes = FALSE) +
-  scale_x_continuous(breaks = quarter_breaks, labels = quarter_labels) +
-  scale_y_continuous(limits = c(stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
-  labs(
-    title = "Distribusi Sentimen Kuartalan (AFINN Ternormalisasi)",
-    subtitle = "Setiap diagram kotak merangkum satu kuartal; label menunjukkan rata-rata kuartal dan n; garis titik menunjukkan rata-rata sebelum kuartal",
-    x = "Kuartal",
-    y = "AFINN ternormalisasi"
-  ) +
-  theme_premium() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
-ggsave(file.path(figures_dir, "sentiment_trend_quarterly_id.png"), plot = p5_id, width = 14, height = 6, dpi = 300)
+if (draw_quarterly_distribution) {
+  p5_id <- ggplot(trend_reviews, aes(x = quarter_index, y = score_afinn, group = quarter_index)) +
+    geom_boxplot(fill = "#D5F5E3", color = "#1E8449", alpha = 0.85, outlier.alpha = 0.35) +
+    geom_point(data = quarter_averages_id, aes(x = quarter_index, y = period_avg), shape = 23, size = 2.8, fill = "#C0392B", color = "white", inherit.aes = FALSE) +
+    geom_line(data = filter(quarter_averages_id, !is.na(prior_avg)), aes(x = quarter_index, y = prior_avg), color = "#7F8C8D", linetype = "dotted", linewidth = 1, inherit.aes = FALSE) +
+    geom_text(data = quarter_averages_id, aes(x = quarter_index, y = stats_label_y, label = stats_label), angle = 90, hjust = 0.5, size = 1.9, color = "#34495E", inherit.aes = FALSE) +
+    scale_x_continuous(breaks = quarter_breaks, labels = quarter_labels) +
+    scale_y_continuous(limits = c(stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
+    labs(
+      title = "Distribusi Sentimen Kuartalan (AFINN Ternormalisasi)",
+      subtitle = "Setiap diagram kotak merangkum satu kuartal; label menunjukkan rata-rata kuartal dan n; garis titik menunjukkan rata-rata sebelum kuartal",
+      x = "Kuartal",
+      y = "AFINN ternormalisasi"
+    ) +
+    theme_premium() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
+  ggsave(file.path(figures_dir, "sentiment_trend_quarterly_id.png"), plot = p5_id, width = 14, height = 6, dpi = 300)
+} else {
+  cat("Skipping sentiment_trend_quarterly_id.png because it is not in the selected figure set.\n")
+}
 
 year_averages_id <- year_averages %>%
   mutate(

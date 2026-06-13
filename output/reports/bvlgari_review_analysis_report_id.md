@@ -78,15 +78,15 @@ Korpus sangat condong positif. Karena itu, analisis tidak boleh berhenti pada ra
 
 ## 5. Profil Tahunan, Geografis, dan Rating
 
-Profil tahunan menggabungkan waktu, geografi pengulas, dan distribusi rating. `output/reports/annual_review_profile.csv` menyajikan jumlah ulasan per tahun, lokasi pengulas dengan sedikitnya dua ulasan, rata-rata rating, dan distribusi rating bintang lima sampai satu. Lokasi pengulas yang hilang diberi label `Unknown`, dan daftar lokasi per tahun dibatasi agar tabel tetap terbaca.
+Profil tahunan menggabungkan waktu, geografi pengulas, dan distribusi rating. `output/reports/annual_review_profile.csv` menyajikan jumlah ulasan per tahun, negara pengulas dengan sedikitnya dua ulasan, rata-rata rating, dan distribusi rating bintang lima sampai satu. Negara pengulas berasal dari normalisasi `reviewer_location` ke `reviewer_country`, sehingga bentuk seperti `Singapore, Singapore` dan `Singapore` dihitung bersama. Geografi pengulas yang hilang diberi label `Unknown`, dan daftar negara per tahun dibatasi agar tabel tetap terbaca.
 
 Volume ulasan tidak merata antar tahun. Periode 2016, 2017, 2018, dan bagian awal 2026 memiliki jumlah ulasan tinggi, sedangkan 2006 dan 2007 hanya memiliki sedikit ulasan. Tahun dengan volume rendah harus ditafsirkan hati-hati karena satu atau dua ulasan dapat mengubah rata-rata secara tajam. Distribusi rating juga sangat condong: 596 dari 762 ulasan adalah ulasan 5 bintang, sedangkan 89 ulasan berada pada rating 1 sampai 3.
 
-Profil lokasi pengulas menunjukkan jangkauan internasional. Singapore, Jakarta, Sydney, Hong Kong, London, dan beberapa kota lain muncul berulang kali. Namun, 178 ulasan tidak memiliki lokasi pengulas. Karena lokasi bersifat self-reported dan tidak lengkap, geografi harus dibaca sebagai konteks mengenai pengulas yang terlihat dalam data, bukan sebagai distribusi asal pasar yang representatif.
+Profil negara pengulas menunjukkan jangkauan internasional. United States, Australia, Indonesia, Singapore, China, United Kingdom, dan beberapa pasar lain muncul berulang kali. Namun, 178 ulasan tidak memiliki geografi pengulas. Karena lokasi bersifat self-reported dan tidak lengkap, geografi harus dibaca sebagai konteks mengenai pengulas yang terlihat dalam data, bukan sebagai distribusi asal pasar yang representatif.
 
-Grafik berikut memperluas profil geografis dengan membandingkan sentimen median menurut region pengulas. Grafik memakai skor AFINN yang dinormalisasi ke panjang ulasan median dan hanya menampilkan region dengan sedikitnya lima ulasan. Median dipilih karena ukuran kelompok region tidak seimbang dan satu ulasan ekstrem dapat memengaruhi mean secara berlebihan.
+Grafik berikut memperluas profil geografis dengan membandingkan sentimen median menurut negara pengulas. Grafik memakai skor AFINN yang dinormalisasi ke panjang ulasan median dan hanya menampilkan negara dengan sedikitnya lima ulasan. Median dipilih karena ukuran kelompok negara tidak seimbang dan satu ulasan ekstrem dapat memengaruhi mean secara berlebihan.
 
-![Gambar 2. Skor sentimen median yang dinormalisasi menurut region pengulas.](../figures/sentiment_by_region_bar_chart_id.png)
+![Gambar 2. Skor sentimen median yang dinormalisasi menurut negara pengulas.](../figures/sentiment_by_region_bar_chart_id.png)
 
 ## 6. Validasi Data dan Prapemrosesan Teks
 

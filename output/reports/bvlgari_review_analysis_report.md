@@ -145,40 +145,40 @@ These figures show a strongly positive and high-rating corpus. This high skew is
 
 ### 5.5 Annual Review Profile: Temporal, Geographical, and Rating Analysis
 
-The workflow writes `output/reports/annual_review_profile.csv` to summarize the corpus by year. This table follows the logic of the reference paper's annual profile by combining temporal coverage, reviewer geography, rating average, and rating distribution. The geography column uses the prepared dataset's `reviewer_location` field. Because the field is self-reported and incomplete, missing values are labeled `Unknown`, and only locations with at least two reviews in a year are listed. To keep the report readable, the table lists the four most frequent locations at the threshold and reports how many additional qualifying locations were omitted from the printed cell.
+The workflow writes `output/reports/annual_review_profile.csv` to summarize the corpus by year. This table follows the logic of the reference paper's annual profile by combining temporal coverage, reviewer geography, rating average, and rating distribution. The geography column uses `reviewer_country`, a normalized country field derived from the prepared dataset's self-reported `reviewer_location` field. Because the field is self-reported and incomplete, missing values are labeled `Unknown`, and only countries with at least two reviews in a year are listed. To keep the report readable, the table lists the four most frequent countries at the threshold and reports how many additional qualifying country groups were omitted from the printed cell.
 
-| Year | Reviews | Reviewer locations, n>=2 | Avg rating | 5 | 4 | 3 | 2 | 1 |
+| Year | Reviews | Reviewer countries, n>=2 | Avg rating | 5 | 4 | 3 | 2 | 1 |
 |---|---:|---|---:|---:|---:|---:|---:|---:|
-| 2026 | 72 | Unknown (66) | 5.00 | 72 | 0 | 0 | 0 | 0 |
+| 2026 | 72 | Unknown (66), United States (2) | 5.00 | 72 | 0 | 0 | 0 | 0 |
 | 2025 | 18 | Unknown (12) | 4.94 | 17 | 1 | 0 | 0 | 0 |
-| 2024 | 17 | Unknown (8) | 4.47 | 14 | 1 | 0 | 0 | 2 |
-| 2023 | 20 | Unknown (6) | 4.95 | 19 | 1 | 0 | 0 | 0 |
-| 2022 | 25 | Unknown (5), Jakarta, Indonesia (3), Singapore, Singapore (3), Bali, Indonesia (2), plus 1 other locations | 4.52 | 21 | 1 | 0 | 1 | 2 |
-| 2021 | 10 | Indonesia (2), Jakarta, Indonesia (2), Unknown (2) | 4.80 | 9 | 0 | 1 | 0 | 0 |
-| 2020 | 14 | No region reached the minimum review count | 4.93 | 13 | 1 | 0 | 0 | 0 |
-| 2019 | 60 | Unknown (11), New York City, New York (5), Hong Kong, China (4), Singapore, Singapore (4), plus 2 other locations | 4.65 | 50 | 5 | 2 | 0 | 3 |
-| 2018 | 76 | Unknown (14), Hong Kong, China (5), London, United Kingdom (3), Singapore, Singapore (3), plus 6 other locations | 4.68 | 64 | 5 | 3 | 3 | 1 |
-| 2017 | 93 | Unknown (21), Singapore, Singapore (5), London, United Kingdom (4), Sydney, Australia (4), plus 5 other locations | 4.72 | 77 | 10 | 3 | 2 | 1 |
-| 2016 | 89 | Unknown (13), Jakarta, Indonesia (5), Singapore, Singapore (5), Kuala Lumpur, Malaysia (3), plus 6 other locations | 4.48 | 67 | 8 | 8 | 2 | 4 |
-| 2015 | 58 | Unknown (12), Singapore, Singapore (4), Jakarta, Indonesia (2), Melbourne, Australia (2), plus 1 other locations | 4.50 | 41 | 9 | 5 | 2 | 1 |
-| 2014 | 41 | Singapore, Singapore (7), Unknown (3), Brisbane, Australia (2), Hong Kong, China (2), plus 1 other locations | 4.05 | 24 | 8 | 1 | 3 | 5 |
-| 2013 | 48 | Singapore, Singapore (6), Sydney, Australia (3), London, United Kingdom (2), Perth, Australia (2), plus 1 other locations | 4.19 | 32 | 4 | 5 | 3 | 4 |
-| 2012 | 48 | Hong Kong, China (4), Jakarta, Indonesia (4), Sydney, Australia (3), Singapore, Singapore (2), plus 1 other locations | 4.29 | 31 | 7 | 6 | 1 | 3 |
-| 2011 | 23 | Sydney, Australia (2) | 4.22 | 15 | 3 | 2 | 1 | 2 |
-| 2010 | 12 | Singapore, Singapore (2) | 4.08 | 6 | 3 | 2 | 0 | 1 |
-| 2009 | 21 | No region reached the minimum review count | 4.48 | 14 | 5 | 0 | 2 | 0 |
-| 2008 | 10 | No region reached the minimum review count | 4.40 | 6 | 3 | 0 | 1 | 0 |
-| 2007 | 4 | No region reached the minimum review count | 3.75 | 1 | 2 | 0 | 1 | 0 |
-| 2006 | 3 | No region reached the minimum review count | 5.00 | 3 | 0 | 0 | 0 | 0 |
-| Total | 762 | Unknown (178), Singapore, Singapore (45), Jakarta, Indonesia (23), Sydney, Australia (20), plus 67 other locations | 4.56 | 596 | 77 | 38 | 22 | 29 |
+| 2024 | 17 | Unknown (8), United States (4) | 4.47 | 14 | 1 | 0 | 0 | 2 |
+| 2023 | 20 | Unknown (6), India (2), United Kingdom (2), United States (2) | 4.95 | 19 | 1 | 0 | 0 | 0 |
+| 2022 | 25 | Indonesia (9), Unknown (5), Singapore (4), India (2) | 4.52 | 21 | 1 | 0 | 1 | 2 |
+| 2021 | 10 | Indonesia (6), Unknown (2) | 4.80 | 9 | 0 | 1 | 0 | 0 |
+| 2020 | 14 | Australia (2), United Arab Emirates (2) | 4.93 | 13 | 1 | 0 | 0 | 0 |
+| 2019 | 60 | United States (16), Unknown (11), Australia (4), China (4), plus 4 other country groups | 4.65 | 50 | 5 | 2 | 0 | 3 |
+| 2018 | 76 | Unknown (14), China (11), United States (9), Indonesia (8), plus 9 other country groups | 4.68 | 64 | 5 | 3 | 3 | 1 |
+| 2017 | 93 | Unknown (21), Indonesia (9), United States (9), Australia (7), plus 10 other country groups | 4.72 | 77 | 10 | 3 | 2 | 1 |
+| 2016 | 89 | Unknown (13), Australia (12), Indonesia (11), United States (11), plus 6 other country groups | 4.48 | 67 | 8 | 8 | 2 | 4 |
+| 2015 | 58 | Unknown (12), United States (9), Indonesia (8), Australia (6), plus 4 other country groups | 4.50 | 41 | 9 | 5 | 2 | 1 |
+| 2014 | 41 | Singapore (7), Australia (6), United States (4), China (3), plus 5 other country groups | 4.05 | 24 | 8 | 1 | 3 | 5 |
+| 2013 | 48 | Australia (11), United States (8), Singapore (7), Indonesia (3), plus 5 other country groups | 4.19 | 32 | 4 | 5 | 3 | 4 |
+| 2012 | 48 | Australia (9), United States (9), Indonesia (7), China (5), plus 4 other country groups | 4.29 | 31 | 7 | 6 | 1 | 3 |
+| 2011 | 23 | Australia (6), United States (3), Hong Kong (2), Singapore (2) | 4.22 | 15 | 3 | 2 | 1 | 2 |
+| 2010 | 12 | Singapore (3), United States (3), Hong Kong (2) | 4.08 | 6 | 3 | 2 | 0 | 1 |
+| 2009 | 21 | United States (4), Singapore (3), India (2), United Kingdom (2) | 4.48 | 14 | 5 | 0 | 2 | 0 |
+| 2008 | 10 | Australia (2) | 4.40 | 6 | 3 | 0 | 1 | 0 |
+| 2007 | 4 | No country reached the minimum review count | 3.75 | 1 | 2 | 0 | 1 | 0 |
+| 2006 | 3 | United States (2) | 5.00 | 3 | 0 | 0 | 0 | 0 |
+| Total | 762 | Unknown (178), United States (98), Australia (73), Indonesia (70), plus 34 other country groups | 4.56 | 596 | 77 | 38 | 22 | 29 |
 
 The annual profile shows that the dataset is not evenly distributed across time. Review volume is highest in 2016, 2017, 2018, and the partial 2026 period. Years with very low volume, such as 2006 and 2007, should be interpreted cautiously because a small number of reviews can move the annual average sharply. This annual profiling approach follows the temporal-summary logic used in the reference TripAdvisor sentiment study (Adnyana et al., 2026). The rating distribution is also highly skewed: 596 of 762 reviews are five-star reviews, while 89 reviews are rated one to three stars. This skew supports the decision to examine low-rating shares, sentiment distributions, and text-level complaints rather than relying only on the overall mean rating.
 
-The reviewer-location profile indicates broad international reach, with Singapore, Jakarta, Sydney, Hong Kong, London, and other major travel markets appearing repeatedly in the table. However, 178 reviews have missing reviewer location, and recent years contain a particularly high share of `Unknown` locations. Therefore, reviewer geography should be treated as contextual evidence about the visible reviewer base, not as a representative market-origin distribution.
+The reviewer-country profile indicates broad international reach, with the United States, Australia, Indonesia, Singapore, China, the United Kingdom, and other markets appearing repeatedly in the table. However, 178 reviews have missing reviewer geography, and recent years contain a particularly high share of `Unknown` locations. Therefore, reviewer geography should be treated as contextual evidence about the visible reviewer base, not as a representative market-origin distribution.
 
-The regional sentiment chart adds a second geographic view. It summarizes the median length-normalized AFINN sentiment score for each reviewer region with at least five reviews, excluding `Unknown` locations. Median sentiment is preferable to mean sentiment here because reviewer regions have uneven review counts and individual reviews can be unusually positive or negative. The chart is therefore useful for classroom comparison of visible reviewer-location groups, but it should not be interpreted as a representative market-origin ranking.
+The country sentiment chart adds a second geographic view. It summarizes the median length-normalized AFINN sentiment score for each reviewer country with at least five reviews, excluding `Unknown` locations. Median sentiment is preferable to mean sentiment here because reviewer countries have uneven review counts and individual reviews can be unusually positive or negative. The chart is therefore useful for comparing visible reviewer-country groups, but it should not be interpreted as a representative market-origin ranking.
 
-![Figure 1b. Median length-normalized sentiment score by reviewer region.](../figures/sentiment_by_region_bar_chart.png)
+![Figure 1b. Median length-normalized sentiment score by reviewer country.](../figures/sentiment_by_region_bar_chart.png)
 
 ### 5.6 Structured Aspect Rating Availability
 
@@ -568,7 +568,7 @@ The project generates several visual outputs, each with a methodological purpose
 |---|---|
 | Sentiment distribution | Shows overall positive, neutral, and negative classification balance. |
 | Rating-sentiment boxplot | Compares textual sentiment with star ratings and identifies divergence. |
-| Regional sentiment bar chart | Compares median length-normalized sentiment across reviewer regions with enough visible reviews. |
+| Country sentiment bar chart | Compares median length-normalized sentiment across reviewer countries with enough visible reviews. |
 | Aspect mean ratings | Compares structured value, rooms, location, cleanliness, service, and sleep-quality ratings. |
 | Aspect low-score share | Identifies dimensions where 1-3 star aspect ratings are concentrated. |
 | Yearly aspect-rating heatmap | Shows whether structured aspect ratings change across years while displaying available rating counts. |
