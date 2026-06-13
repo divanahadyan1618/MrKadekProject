@@ -953,102 +953,209 @@ ggsave(file.path(figures_dir, "emotions_breakdown.png"), plot = p2, width = 8, h
 # =====================================================================
 # STEP 6: Draw the Word Cloud
 # =====================================================================
-# This word cloud is sentiment-only.
-# That means we do NOT use every frequent word in the reviews.
-# Instead, we first ask the AFINN sentiment dictionary which words have a
-# positive or negative sentiment score. Words with score 0 are neutral, so they
-# are removed from this chart.
-# Some words can be sentiment words in one context but neutral hotel words in
-# another context. For example, AFINN treats "lobby" as negative because of the
-# political meaning, but a hotel lobby is just a place. We exclude those obvious
-# hotel-context false positives here.
-domain_neutral_words <- c("hotel", "resort", "tripadvisor", "review", "stay", "room", "villa", "service", "lobby")
+# The first word cloud used only frequent words, which made generic hotel words
+# too dominant. The second version used only emotional/sentiment words, which
+# made the cloud too sparse. This version combines several useful concepts:
+# - sentiment and emotion words from lexicons,
+# - hotel experience words such as staff, food, pool, beach, spa, and villa,
+# - frequent context words that appear often enough to describe the review topic.
+#
+# We still remove filler words that are too broad to explain the guest
+# experience. The goal is a denser cloud that is still interpretable.
+wordcloud_excluded_words <- c(
+  "hotel", "hotels", "resort", "resorts", "tripadvisor", "review", "reviews",
+  "thing", "things", "really", "also", "just", "even", "much", "many", "like",
+  "will", "would", "could", "get", "got", "one", "two", "every", "everything",
+  "nothing", "back", "come", "came", "going", "went", "made", "make", "take",
+  "took", "way", "bit", "lot", "lots", "etc", "yes", "yeah", "don", "didn",
+  "isn", "wasn", "weren", "aren", "ve", "ll", "re", "lobby"
+)
 
-sentiment_lexicon_words <- cleaned_tokens %>%
-  distinct(word) %>%
-  mutate(sentiment_score = syuzhet::get_sentiment(word, method = "afinn")) %>%
-  filter(sentiment_score != 0) %>%
-  filter(!word %in% domain_neutral_words)
+# These are hotel and resort concepts that are meaningful even when they are
+# not emotional words. Keeping them helps the cloud show what guests talk about,
+# not only how strongly they feel.
+wordcloud_domain_terms <- c(
+  "bali", "bulgari", "bvlgari", "uluwatu", "sangkar", "villa", "villas",
+  "room", "rooms", "bathroom", "bedroom", "staff", "team", "service", "butler",
+  "food", "restaurant", "restaurants", "breakfast", "dinner", "dining", "bar",
+  "pool", "beach", "ocean", "cliff", "view", "views", "spa", "property",
+  "location", "privacy", "private", "luxury", "wedding", "honeymoon", "night",
+  "nights", "day", "days", "stay", "stayed", "staying", "visit", "experience",
+  "people", "guests", "monkeys", "outdoor"
+)
 
-# Now count only the review words that AFINN says are sentiment words.
-# The bigger the word, the more often guests used that sentiment word.
-sentiment_word_counts <- cleaned_tokens %>%
-  inner_join(sentiment_lexicon_words, by = "word") %>%
-  count(word, sentiment_score, sort = TRUE)
+# Some complaint words appear less often than positive and domain words, so a
+# pure frequency ranking can crowd them out. This list gives the clearest
+# negative terms a fair chance to appear without letting every lexicon false
+# positive turn red.
+wordcloud_negative_terms <- c(
+  "bad", "cold", "complain", "complaint", "complaints", "dirty", "disappointed",
+  "disappointing", "disappointment", "doubt", "expensive", "fault", "forget",
+  "hard", "lack", "late", "leave", "limited", "lost", "miss", "missing",
+  "negative", "noise", "overpriced", "poor", "problem", "problems", "regret",
+  "slow", "stop", "wait", "waiting", "worn", "wrong"
+)
 
-if (nrow(sentiment_word_counts) == 0) {
-  message("No AFINN sentiment words were found in the cleaned review tokens, so Step 4 is saving a placeholder word cloud and continuing.")
+# These words can be marked negative by a general-purpose lexicon, but in hotel
+# reviews they are usually neutral objects or contexts. We can still show them
+# as topic words if they are frequent, but we do not color them as complaints.
+wordcloud_false_negative_words <- c(
+  "black", "buffet", "fell", "lounge", "plunge", "retreat", "secluded",
+  "serve", "spent", "toilet", "touched", "words"
+)
+
+wordcloud_token_counts <- cleaned_tokens %>%
+  mutate(word = str_to_lower(word)) %>%
+  filter(str_detect(word, "^[a-z]+$")) %>%
+  filter(str_length(word) >= 4) %>%
+  filter(!word %in% wordcloud_excluded_words) %>%
+  count(word, sort = TRUE)
+
+if (nrow(wordcloud_token_counts) == 0) {
+  message("No usable words were found for the experience word cloud, so Step 4 is saving a placeholder and continuing.")
   save_placeholder_plot(
     "wordcloud.png",
-    "Sentiment Word Cloud",
-    "No AFINN sentiment words were found after filtering the cleaned review tokens.",
+    "Guest Experience Word Cloud",
+    "No usable words were found after filtering the cleaned review tokens.",
     width = 5.4,
     height = 5.4
   )
   save_placeholder_plot(
     "wordcloud_id.png",
-    "Word Cloud Kata Bersentimen",
-    "Tidak ada kata bersentimen AFINN yang ditemukan setelah token ulasan bersih disaring.",
+    "Word Cloud Pengalaman Tamu",
+    "Tidak ada kata yang dapat digunakan setelah token ulasan bersih disaring.",
     width = 5.4,
     height = 5.4
   )
 } else {
-  max_sentiment_cloud_words <- min(40, nrow(sentiment_word_counts))
+  nrc_word_scores <- syuzhet::get_nrc_sentiment(wordcloud_token_counts$word) %>%
+    as_tibble()
 
-  # Green words are positive sentiment words. Red words are negative sentiment words.
-  sentiment_word_colors <- if_else(sentiment_word_counts$sentiment_score > 0, "#16A085", "#E74C3C")
+  wordcloud_candidates <- bind_cols(wordcloud_token_counts, nrc_word_scores) %>%
+    mutate(
+      afinn_score = syuzhet::get_sentiment(word, method = "afinn"),
+      emotion_score = anger + anticipation + disgust + fear + joy + sadness + surprise + trust,
+      is_negative_term = (afinn_score < 0 | word %in% wordcloud_negative_terms) &
+        !(word %in% wordcloud_false_negative_words),
+      has_sentiment_or_emotion = afinn_score != 0 | positive > 0 | negative > 0 | emotion_score > 0,
+      is_domain_term = word %in% wordcloud_domain_terms,
+      # A frequent context word is a high-count word that survived the exclusion
+      # list. This lets the cloud include concrete review topics even when a
+      # lexicon treats them as neutral.
+      is_frequent_context = min_rank(desc(n)) <= 120 & n >= 18,
+      word_group = case_when(
+        is_negative_term ~ "negative",
+        afinn_score > 0 | positive > negative | emotion_score > 0 ~ "positive_or_emotional",
+        is_domain_term ~ "hotel_experience",
+        TRUE ~ "frequent_context"
+      )
+    ) %>%
+    filter(has_sentiment_or_emotion | is_domain_term | is_frequent_context)
 
-  cat("Drawing the sentiment-only word cloud...\n")
+  negative_word_quota <- 14
+  total_word_quota <- 72
+  selected_negative_words <- wordcloud_candidates %>%
+    filter(is_negative_term, n >= 8) %>%
+    arrange(desc(n), word) %>%
+    slice_head(n = negative_word_quota)
+  selected_other_words <- wordcloud_candidates %>%
+    filter(!(word %in% selected_negative_words$word)) %>%
+    arrange(desc(n), word) %>%
+    slice_head(n = total_word_quota - nrow(selected_negative_words))
+  wordcloud_candidates <- bind_rows(selected_negative_words, selected_other_words) %>%
+    arrange(desc(n), word)
 
-  # Display the word cloud in the RStudio Plots tab only during interactive use.
-  # In Rscript, the PNG file below is the intended saved output.
-  if (interactive()) {
+  if (nrow(wordcloud_candidates) == 0) {
+    message("The experience word cloud filters removed all words, so Step 4 is saving a placeholder and continuing.")
+    save_placeholder_plot(
+      "wordcloud.png",
+      "Guest Experience Word Cloud",
+      "No words remained after the combined experience-word filters.",
+      width = 5.4,
+      height = 5.4
+    )
+    save_placeholder_plot(
+      "wordcloud_id.png",
+      "Word Cloud Pengalaman Tamu",
+      "Tidak ada kata yang tersisa setelah filter gabungan kata pengalaman.",
+      width = 5.4,
+      height = 5.4
+    )
+  } else {
+    # Very common words can become so large that they squeeze out smaller words.
+    # We cap the drawing size at the 80th percentile. The real count still
+    # decides which words appear; the cap only makes the picture denser.
+    max_wordcloud_frequency <- quantile(wordcloud_candidates$n, 0.80, names = FALSE)
+    negative_visual_multiplier <- 1.8
+    wordcloud_candidates <- wordcloud_candidates %>%
+      mutate(
+        drawing_frequency = case_when(
+          word_group == "negative" ~ pmin(n * negative_visual_multiplier, max_wordcloud_frequency),
+          TRUE ~ pmin(n, max_wordcloud_frequency)
+        ),
+        word_color = case_when(
+          word_group == "negative" ~ "#B75A4A",
+          word_group == "positive_or_emotional" ~ "#16A085",
+          word_group == "hotel_experience" ~ "#D4A017",
+          TRUE ~ "#6C5B7B"
+        )
+      )
+
+    cat("Drawing the combined guest experience word cloud...\n")
+
+    # Display the word cloud in the RStudio Plots tab only during interactive use.
+    # In Rscript, the PNG files below are the intended saved outputs.
+    if (interactive()) {
+      set.seed(123)
+      wordcloud(
+        words = wordcloud_candidates$word,
+        freq = wordcloud_candidates$drawing_frequency,
+        min.freq = 2,
+        max.words = nrow(wordcloud_candidates),
+        random.order = FALSE,
+        rot.per = 0.24,
+        scale = c(3.0, 0.4),
+        ordered.colors = TRUE,
+        colors = wordcloud_candidates$word_color
+      )
+    }
+
+    # Open a digital "canvas" to draw the picture on.
+    png(file.path(figures_dir, "wordcloud.png"), width = 800, height = 800, res = 150)
+    set.seed(123) # Lock the randomness so the cloud is repeatable.
+
+    # Call the wordcloud drawing tool.
+    wordcloud(
+      words = wordcloud_candidates$word,
+      freq = wordcloud_candidates$drawing_frequency,
+      min.freq = 2,
+      max.words = nrow(wordcloud_candidates),
+      random.order = FALSE,
+      rot.per = 0.24,
+      scale = c(3.0, 0.4),
+      ordered.colors = TRUE,
+      colors = wordcloud_candidates$word_color
+    )
+    dev.off() # Close the digital canvas and save the file.
+
+    # The Indonesian paper still shows the original review words because those
+    # words are data values from the corpus. Translating the words would change
+    # the evidence, so both language versions use the same cloud.
+    png(file.path(figures_dir, "wordcloud_id.png"), width = 800, height = 800, res = 150)
     set.seed(123)
     wordcloud(
-      words = sentiment_word_counts$word,
-      freq = sentiment_word_counts$n,
+      words = wordcloud_candidates$word,
+      freq = wordcloud_candidates$drawing_frequency,
       min.freq = 2,
-      max.words = max_sentiment_cloud_words,
+      max.words = nrow(wordcloud_candidates),
       random.order = FALSE,
-      rot.per = 0.2,
+      rot.per = 0.24,
+      scale = c(3.0, 0.4),
       ordered.colors = TRUE,
-      colors = sentiment_word_colors
+      colors = wordcloud_candidates$word_color
     )
+    dev.off()
   }
-
-  # Open a digital "canvas" to draw the picture on
-  png(file.path(figures_dir, "wordcloud.png"), width = 800, height = 800, res = 150)
-  set.seed(123) # Lock the randomness so the cloud looks exactly the same every time we run it
-
-  # Call the wordcloud drawing tool
-  wordcloud(
-    words = sentiment_word_counts$word, # What sentiment words to draw
-    freq = sentiment_word_counts$n,     # How big to draw them based on frequency
-    min.freq = 2,               # Ignore words that only appeared once
-    max.words = max_sentiment_cloud_words, # Stop drawing after 40 words so it doesn't look messy
-    random.order = FALSE,       # Put the biggest words right in the center
-    rot.per = 0.2,              # Randomly rotate 20% of the words sideways
-    ordered.colors = TRUE,      # Use each word's own positive/negative color
-    colors = sentiment_word_colors # Green means positive, red means negative
-  )
-  dev.off() # Close the digital canvas and save the file!
-
-  # The Indonesian paper still shows the original review words because those
-  # words are data values from the corpus. Only chart titles and labels are
-  # localized elsewhere; translating the words would change the evidence.
-  png(file.path(figures_dir, "wordcloud_id.png"), width = 800, height = 800, res = 150)
-  set.seed(123)
-  wordcloud(
-    words = sentiment_word_counts$word,
-    freq = sentiment_word_counts$n,
-    min.freq = 2,
-    max.words = max_sentiment_cloud_words,
-    random.order = FALSE,
-    rot.per = 0.2,
-    ordered.colors = TRUE,
-    colors = sentiment_word_colors
-  )
-  dev.off()
 }
 
 # =====================================================================

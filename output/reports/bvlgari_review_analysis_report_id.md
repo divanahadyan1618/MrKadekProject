@@ -96,7 +96,9 @@ Tahap kedua adalah standardisasi skema. Fungsi `standardize_hotel_reviews()` mem
 
 Pembersihan teks dilakukan melalui `clean_text()` di `scripts/helpers.R`. Proses ini mengubah teks menjadi huruf kecil, menghapus HTML, URL, tanda baca, angka, dan spasi berulang, serta menstandardisasi karakter Unicode sejauh memungkinkan. Fungsi `normalize_slang()` menangani sejumlah ungkapan informal secara konservatif, misalnya bentuk kata yang dipanjangkan dan singkatan umum. Setelah itu, teks ditokenisasi memakai `tidytext::unnest_tokens()`.
 
-![Gambar 3. Word cloud kata bersentimen setelah pembersihan dan penyaringan.](../figures/wordcloud_id.png)
+![Gambar 3. Word cloud pengalaman tamu setelah pembersihan dan filter gabungan.](../figures/wordcloud_id.png)
+
+Dalam word cloud, kata hijau kebiruan menunjukkan bahasa positif atau emosional, kata emas menunjukkan topik pengalaman hotel, kata merah lembut menunjukkan istilah negatif atau keluhan, dan kata ungu menunjukkan konteks lain yang sering muncul.
 
 ## 7. Penskoran Sentimen dan Emosi
 

@@ -245,13 +245,15 @@ The helper also standardizes straight and smart apostrophe contractions before s
 
 ### 7.3 Tokenization
 
-The cleaned review text is tokenized using `tidytext::unnest_tokens()`, creating one row per word. Tokenization supports word-frequency analysis, stopword removal, word clouds, and sentiment-word filtering. The final token file contains 48,563 token rows after preprocessing.
+The cleaned review text is tokenized using `tidytext::unnest_tokens()`, creating one row per word. Tokenization supports word-frequency analysis, stopword removal, word clouds, and experience-word filtering. The final token file contains 48,563 token rows after preprocessing.
 
 ### 7.4 Stopword Removal
 
 Stopwords are removed using the `tidytext` stopword list. This reduces the influence of high-frequency function words such as "the", "and", and "is". Stopword removal is appropriate for word-frequency visualization but should not be used blindly for every NLP task. Some function words can matter for negation, modality, or phrase-level meaning. Because this project uses lexicon-based word matching, stopword removal is primarily used for token-level summaries rather than for preserving syntactic structure, following tidy text principles for transparent token-level analysis (Silge & Robinson, 2016).
 
-![Figure 1. Sentiment-bearing word cloud after text cleaning and filtering.](../figures/wordcloud.png)
+![Figure 1. Guest experience word cloud after text cleaning and combined filtering.](../figures/wordcloud.png)
+
+In the word cloud, teal words mark positive or emotional language, gold words mark hotel-experience topics, muted red words mark negative or complaint-oriented terms, and purple words mark other frequent context terms.
 
 ## 8. Sentiment and Emotion Scoring
 
@@ -259,7 +261,7 @@ Stopwords are removed using the `tidytext` stopword list. This reduces the influ
 
 The study uses lexicon-based sentiment analysis because it is transparent, replicable, and suitable for educational settings. A lexicon approach maps words to preassigned sentiment or emotion values, a standard family of methods in sentiment-analysis research (Liu, 2020). Unlike black-box machine-learning models, lexicon results can be inspected and explained to non-technical stakeholders. This transparency would also be useful if a future management or investment decision-support layer were added.
 
-The limitation is that lexicons may not fully capture sarcasm, idioms, multilingual content, domain-specific meanings, complex negation, or context-dependent sentiment (Liu, 2020). For instance, a word that is negative in a political context may be neutral in a hotel context. Cultural differences in review expression can also affect hotel-review interpretation (Litvin, 2019). The visualization script explicitly excludes some domain-neutral terms from sentiment word clouds when their lexicon meaning is inappropriate for hotel reviews.
+The limitation is that lexicons may not fully capture sarcasm, idioms, multilingual content, domain-specific meanings, complex negation, or context-dependent sentiment (Liu, 2020). For instance, a word that is negative in a political context may be neutral in a hotel context. Cultural differences in review expression can also affect hotel-review interpretation (Litvin, 2019). The visualization script therefore builds the word cloud from a combined set of sentiment words, NRC emotion words, hotel-experience terms, and frequent context words while excluding broad filler terms.
 
 ### 8.2 Syuzhet Score
 
@@ -576,7 +578,7 @@ The project generates several visual outputs, each with a methodological purpose
 | Aspect negative-term heatmap | Highlights negative sentiment words that appear unusually often in low-aspect reviews. |
 | Aspect-text mismatch counts | Shows where rating and text signals disagree and require qualitative review. |
 | Emotion breakdown | Shows dominant NRC emotion categories across the corpus. |
-| Sentiment word cloud | Highlights frequent sentiment-bearing words after filtering domain-neutral terms. |
+| Guest experience word cloud | Combines sentiment/emotion words with hotel-experience and frequent context terms after filtering broad filler words. |
 | Monthly heatmap | Shows median-length-normalized sentiment intensity by month and year. |
 | Monthly rolling trend | Shows smoothed median-length-normalized sentiment movement and prior-average comparison. |
 | Monthly drift monitor | Shows monthly robust z-scores for median sentiment against prior review history. |
