@@ -48,7 +48,7 @@ draw_sentiment_distribution <- TRUE
 draw_aspect_summary_figures <- FALSE
 draw_aspect_yearly_heatmap <- TRUE
 draw_monthly_heatmap <- TRUE
-draw_quarterly_distribution <- FALSE
+draw_quarterly_distribution <- TRUE
 draw_drift_monitor <- FALSE
 
 # =====================================================================
