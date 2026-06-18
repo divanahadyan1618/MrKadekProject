@@ -2158,9 +2158,4 @@ ggsave(
   device = grDevices::png
 )
 
-if (interactive()) {
-  cat("Showing the emotions breakdown chart again in the RStudio Plots pane.\n")
-  print(p2)
-}
-
 cat("Visualizations successfully drawn and saved to the 'output/figures/' folder!\n")
