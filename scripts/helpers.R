@@ -2,7 +2,11 @@
 # Reusable helper functions for TripAdvisor Sentiment Analysis.
 # These functions streamline text cleaning, source-column parsing, and plotting.
 
-library(tidyverse)
+library(dplyr, exclude = c("filter", "lag", "intersect", "setdiff", "setequal", "union"))
+library(readr)
+library(tibble)
+library(tidyr)
+library(purrr)
 library(stringr)
 
 #' Clean Raw Text for Sentiment Analysis
@@ -766,7 +770,7 @@ standardize_hotel_reviews <- function(raw_data) {
     mutate(
       across(c(review_id, hotel_name, title, review_text, review_date), str_squish)
     ) %>%
-    filter(!is.na(review_text), review_text != "")
+    dplyr::filter(!is.na(review_text), review_text != "")
 
   if ("reviewer_location" %in% names(standardized)) {
     standardized <- standardized %>%

@@ -1177,6 +1177,25 @@ class DataWiringTests(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
+    def test_master_workflow_does_not_attach_tidyverse_conflicts(self):
+        temp_dir, project_copy = self.copy_project_for_workflow_test()
+        try:
+            result = subprocess.run(
+                ["Rscript", "Master_TripAdvisor.R"],
+                cwd=project_copy,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=120,
+            )
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 0, output)
+            self.assertNotIn("tidyverse_conflicts()", output)
+            self.assertNotIn("dplyr::filter() masks stats::filter()", output)
+            self.assertNotIn("dplyr::lag()    masks stats::lag()", output)
+        finally:
+            shutil.rmtree(temp_dir)
+
     def test_monthly_rolling_average_uses_calendar_months(self):
         temp_dir, project_copy = self.copy_project_for_workflow_test()
         r_code = """
@@ -1184,11 +1203,11 @@ class DataWiringTests(unittest.TestCase):
         target_month <- as.Date("2021-04-01")
         window_start <- min(seq(target_month, by = "-1 month", length.out = 6))
         expected <- trend_reviews %>%
-          filter(month_start >= window_start, month_start <= target_month) %>%
+          dplyr::filter(month_start >= window_start, month_start <= target_month) %>%
           summarise(value = sum(score_afinn) / n(), .groups = "drop") %>%
           pull(value)
         actual <- month_averages %>%
-          filter(month_start == target_month) %>%
+          dplyr::filter(month_start == target_month) %>%
           pull(rolling_avg_6)
         if (length(actual) != 1 || !isTRUE(all.equal(actual, expected))) {
           stop(
@@ -1235,7 +1254,7 @@ class DataWiringTests(unittest.TestCase):
             raw_avg = mean(score_afinn_raw, na.rm = TRUE),
             .groups = "drop"
           ) %>%
-          filter(abs(normalized_avg - raw_avg) > 1e-6) %>%
+          dplyr::filter(abs(normalized_avg - raw_avg) > 1e-6) %>%
           slice_head(n = 1)
 
         if (nrow(monthly_check) == 0) {
@@ -1245,7 +1264,7 @@ class DataWiringTests(unittest.TestCase):
         target_month <- monthly_check$month_start[[1]]
         expected <- monthly_check$normalized_avg[[1]]
         actual <- month_averages %>%
-          filter(month_start == target_month) %>%
+          dplyr::filter(month_start == target_month) %>%
           pull(period_avg)
 
         if (length(actual) != 1 || !isTRUE(all.equal(actual, expected))) {
@@ -1298,14 +1317,14 @@ class DataWiringTests(unittest.TestCase):
         }
 
         target_month <- sentiment_period_summary %>%
-          filter(period_type == "month", review_count > 0) %>%
+          dplyr::filter(period_type == "month", review_count > 0) %>%
           slice_head(n = 1)
         if (nrow(target_month) != 1) {
           stop("The fixture needs at least one reviewed month.")
         }
 
         expected <- trend_reviews %>%
-          filter(month_start == target_month$period_start[[1]]) %>%
+          dplyr::filter(month_start == target_month$period_start[[1]]) %>%
           summarise(
             mean_afinn_per_median_review = mean(score_afinn_per_median_review, na.rm = TRUE),
             median_afinn_per_median_review = median(score_afinn_per_median_review, na.rm = TRUE),
@@ -1355,14 +1374,14 @@ class DataWiringTests(unittest.TestCase):
         }
 
         aspect_check <- aspect_reviews %>%
-          filter(!is.na(aspect_rating), !is.na(score_afinn_per_median_review), !is.na(score_afinn_raw)) %>%
+          dplyr::filter(!is.na(aspect_rating), !is.na(score_afinn_per_median_review), !is.na(score_afinn_raw)) %>%
           group_by(aspect_key) %>%
           summarise(
             normalized_avg = mean(score_afinn_per_median_review, na.rm = TRUE),
             raw_avg = mean(score_afinn_raw, na.rm = TRUE),
             .groups = "drop"
           ) %>%
-          filter(abs(normalized_avg - raw_avg) > 1e-6) %>%
+          dplyr::filter(abs(normalized_avg - raw_avg) > 1e-6) %>%
           slice_head(n = 1)
 
         if (nrow(aspect_check) == 0) {
@@ -1374,7 +1393,7 @@ class DataWiringTests(unittest.TestCase):
           show_col_types = FALSE
         )
         actual <- alignment %>%
-          filter(aspect_key == aspect_check$aspect_key[[1]]) %>%
+          dplyr::filter(aspect_key == aspect_check$aspect_key[[1]]) %>%
           pull(mean_afinn_sentiment)
         expected <- round(aspect_check$normalized_avg[[1]], 3)
 
@@ -1412,14 +1431,14 @@ class DataWiringTests(unittest.TestCase):
         }
 
         aspect_check <- aspect_reviews %>%
-          filter(!is.na(aspect_rating), !is.na(score_syuzhet_per_median_review), !is.na(score_syuzhet_raw)) %>%
+          dplyr::filter(!is.na(aspect_rating), !is.na(score_syuzhet_per_median_review), !is.na(score_syuzhet_raw)) %>%
           group_by(aspect_key) %>%
           summarise(
             normalized_avg = mean(score_syuzhet_per_median_review, na.rm = TRUE),
             raw_avg = mean(score_syuzhet_raw, na.rm = TRUE),
             .groups = "drop"
           ) %>%
-          filter(abs(normalized_avg - raw_avg) > 1e-6) %>%
+          dplyr::filter(abs(normalized_avg - raw_avg) > 1e-6) %>%
           slice_head(n = 1)
 
         if (nrow(aspect_check) == 0) {
@@ -1431,7 +1450,7 @@ class DataWiringTests(unittest.TestCase):
           show_col_types = FALSE
         )
         actual <- alignment %>%
-          filter(aspect_key == aspect_check$aspect_key[[1]]) %>%
+          dplyr::filter(aspect_key == aspect_check$aspect_key[[1]]) %>%
           pull(mean_syuzhet_sentiment)
         expected <- round(aspect_check$normalized_avg[[1]], 3)
 
@@ -1472,7 +1491,7 @@ class DataWiringTests(unittest.TestCase):
           stop(paste("Negated complaint phrases were dropped:", paste(missing_phrases, collapse = ", ")))
         }
         negated_rows <- phrases %>%
-          filter(term %in% expected_phrases)
+          dplyr::filter(term %in% expected_phrases)
         if (any(negated_rows$term_sentiment != "negative")) {
           stop("Negated complaint phrases should be marked as negative terms.")
         }
@@ -1512,7 +1531,7 @@ class DataWiringTests(unittest.TestCase):
           stop(paste("Missing normalized visualization aspect columns:", paste(missing_columns, collapse = ", ")))
         }
         compared_rows <- aspect_data %>%
-          filter(!is.na(score_afinn_number), !is.na(score_afinn_per_median_review))
+          dplyr::filter(!is.na(score_afinn_number), !is.na(score_afinn_per_median_review))
         if (nrow(compared_rows) == 0) {
           stop("The fixture needs at least one review with normalized AFINN.")
         }
@@ -1803,8 +1822,8 @@ class DataWiringTests(unittest.TestCase):
         self.assertIn("sentiment_word_counts", script)
         self.assertIn("domain_neutral_words", script)
         self.assertIn('syuzhet::get_sentiment(word, method = "afinn")', script)
-        self.assertIn("filter(sentiment_score != 0)", script)
-        self.assertIn("filter(!word %in% domain_neutral_words)", script)
+        self.assertIn("dplyr::filter(sentiment_score != 0)", script)
+        self.assertIn("dplyr::filter(!word %in% domain_neutral_words)", script)
         self.assertIn("ordered.colors = TRUE", script)
         self.assertNotRegex(script, r"(?m)^word_counts <- cleaned_tokens")
 

@@ -12,8 +12,9 @@
 # =====================================================================
 # STEP 1: Load Required Packages (Adding Tools)
 # =====================================================================
-# 'tidyverse' helps us filter and change table data easily.
-library(tidyverse)
+# Load dplyr without the exports that mask base R and stats functions.
+library(dplyr, exclude = c("filter", "lag", "intersect", "setdiff", "setequal", "union"))
+library(readr)
 # 'tidytext' is a specialized toolset used purely for analyzing text and words.
 library(tidytext)
 

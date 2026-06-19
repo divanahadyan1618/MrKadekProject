@@ -13,9 +13,9 @@
 # =====================================================================
 # STEP 1: Load Required Packages
 # =====================================================================
-# 'tidyverse' and 'tidytext' help us read and manipulate our tables.
-library(tidyverse)
-library(tidytext)
+# Load dplyr without the exports that mask base R and stats functions.
+library(dplyr, exclude = c("filter", "lag", "intersect", "setdiff", "setequal", "union"))
+library(readr)
 
 # 'syuzhet' is a very famous toolset built specifically for Sentiment Analysis.
 # It contains the massive dictionaries we need to score emotions.
@@ -76,7 +76,7 @@ sentiment_results <- cleaned_reviews %>%
 # We ignore empty reviews because a review with 0 words cannot be used as a
 # sensible denominator.
 median_review_word_count <- sentiment_results %>%
-  filter(review_word_count > 0) %>%
+  dplyr::filter(review_word_count > 0) %>%
   summarise(value = median(review_word_count), .groups = "drop") %>%
   pull(value)
 

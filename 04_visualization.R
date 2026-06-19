@@ -12,8 +12,14 @@
 # =====================================================================
 # STEP 1: Load Packages and Data
 # =====================================================================
-# We load our toolsets again. 
-library(tidyverse)    # Contains 'ggplot2' - the most powerful charting tool in R.
+# We load our toolsets again.
+library(dplyr, exclude = c("filter", "lag", "intersect", "setdiff", "setequal", "union"))
+library(readr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(tibble)
 library(tidytext)     # For handling our text data.
 library(wordcloud)    # A fun tool specifically for drawing Word Clouds.
 library(RColorBrewer) # A tool that provides beautiful, professional color palettes.
@@ -248,7 +254,7 @@ rating_sentiment <- research_data %>%
       labels = paste(1:5, "star")
     )
   ) %>%
-  filter(!is.na(rating_group), !is.na(score_afinn))
+  dplyr::filter(!is.na(rating_group), !is.na(score_afinn))
 
 # Count how many reviews are inside each rating group.
 # We print these counts below the boxes because a box based on 596 reviews is
@@ -412,7 +418,7 @@ if (is.na(available_geography_column)) {
       region = na_if(region, ""),
       region = replace_na(region, "Unknown")
     ) %>%
-    filter(
+    dplyr::filter(
       region != "Unknown",
       !is.na(score_afinn_per_median_review)
     ) %>%
@@ -424,7 +430,7 @@ if (is.na(available_geography_column)) {
       negative_text_share = mean(score_afinn_per_median_review < 0, na.rm = TRUE),
       .groups = "drop"
     ) %>%
-    filter(review_count >= minimum_reviews_for_region_sentiment) %>%
+    dplyr::filter(review_count >= minimum_reviews_for_region_sentiment) %>%
     mutate(
       median_afinn_per_median_review = round(median_afinn_per_median_review, 2),
       mean_afinn_per_median_review = round(mean_afinn_per_median_review, 2),
@@ -543,7 +549,7 @@ annual_profile_reviews <- research_data %>%
     year = as.character(lubridate::year(date_parsed)),
     rating_number = as.integer(round(readr::parse_number(as.character(rating))))
   ) %>%
-  filter(!is.na(date_parsed), !is.na(year), !is.na(rating_number), rating_number %in% 1:5)
+  dplyr::filter(!is.na(date_parsed), !is.na(year), !is.na(rating_number), rating_number %in% 1:5)
 
 # This small helper counts the number of reviews at each star level.
 # The final columns are ordered from 5 stars down to 1 star to match the paper
@@ -580,7 +586,7 @@ build_region_summary <- function(data) {
       region_name = replace_na(region_name, "Unknown")
     ) %>%
     count(year, region_name, name = "review_count") %>%
-    filter(review_count >= minimum_reviews_for_region_listing) %>%
+    dplyr::filter(review_count >= minimum_reviews_for_region_listing) %>%
     arrange(year, desc(review_count), region_name)
 
   all_years <- data %>%
@@ -599,7 +605,7 @@ build_region_summary <- function(data) {
       total_regions_at_threshold = n(),
       region_rank = row_number()
     ) %>%
-    filter(region_rank <= maximum_regions_listed_per_year) %>%
+    dplyr::filter(region_rank <= maximum_regions_listed_per_year) %>%
     summarise(
       listed_regions = paste0(region_name, " (", review_count, ")", collapse = ", "),
       omitted_region_count = max(total_regions_at_threshold) - n(),
@@ -803,7 +809,7 @@ if (length(available_aspect_columns) > 0) {
   # These rows are important because they show satisfied guests who still
   # reported a specific problem. Example: a 5-star review with Value = 2.
   high_overall_low_aspect_reviews <- aspect_long %>%
-    filter(
+    dplyr::filter(
       !is.na(overall_rating),
       overall_rating >= 4,
       !is.na(aspect_rating),
@@ -904,7 +910,7 @@ if (length(available_aspect_columns) > 0) {
   # Chart 3: summarize aspect ratings by year. Years with very few ratings are
   # colored grey because tiny sample sizes should not be over-interpreted.
   aspect_yearly <- aspect_long %>%
-    filter(!is.na(year_label), !is.na(aspect_rating)) %>%
+    dplyr::filter(!is.na(year_label), !is.na(aspect_rating)) %>%
     group_by(year_label, aspect_label) %>%
     summarise(
       mean_rating = mean(aspect_rating),
@@ -1050,9 +1056,9 @@ wordcloud_false_negative_words <- c(
 
 wordcloud_token_counts <- cleaned_tokens %>%
   mutate(word = str_to_lower(word)) %>%
-  filter(str_detect(word, "^[a-z]+$")) %>%
-  filter(str_length(word) >= 4) %>%
-  filter(!word %in% wordcloud_excluded_words) %>%
+  dplyr::filter(str_detect(word, "^[a-z]+$")) %>%
+  dplyr::filter(str_length(word) >= 4) %>%
+  dplyr::filter(!word %in% wordcloud_excluded_words) %>%
   count(word, sort = TRUE)
 
 if (nrow(wordcloud_token_counts) == 0) {
@@ -1094,16 +1100,16 @@ if (nrow(wordcloud_token_counts) == 0) {
         TRUE ~ "frequent_context"
       )
     ) %>%
-    filter(has_sentiment_or_emotion | is_domain_term | is_frequent_context)
+    dplyr::filter(has_sentiment_or_emotion | is_domain_term | is_frequent_context)
 
   negative_word_quota <- 14
   total_word_quota <- 72
   selected_negative_words <- wordcloud_candidates %>%
-    filter(is_negative_term, n >= 8) %>%
+    dplyr::filter(is_negative_term, n >= 8) %>%
     arrange(desc(n), word) %>%
     slice_head(n = negative_word_quota)
   selected_other_words <- wordcloud_candidates %>%
-    filter(!(word %in% selected_negative_words$word)) %>%
+    dplyr::filter(!(word %in% selected_negative_words$word)) %>%
     arrange(desc(n), word) %>%
     slice_head(n = total_word_quota - nrow(selected_negative_words))
   wordcloud_candidates <- bind_rows(selected_negative_words, selected_other_words) %>%
@@ -1225,7 +1231,7 @@ trend_reviews <- research_data %>%
   )
 
 unparseable_review_dates <- trend_reviews %>%
-  filter(is.na(date_parsed), !is.na(review_date), str_squish(as.character(review_date)) != "") %>%
+  dplyr::filter(is.na(date_parsed), !is.na(review_date), str_squish(as.character(review_date)) != "") %>%
   distinct(review_date)
 
 if (nrow(unparseable_review_dates) > 0) {
@@ -1249,7 +1255,7 @@ trend_reviews <- trend_reviews %>%
     year_label = as.character(lubridate::year(date_parsed))
   ) %>%
   # Ignore broken dates and reviews that cannot be normalized.
-  filter(!is.na(date_parsed), !is.na(score_afinn_per_median_review))
+  dplyr::filter(!is.na(date_parsed), !is.na(score_afinn_per_median_review))
 
 # Give every calendar month a simple number: 1, 2, 3, and so on.
 # Some months have no reviews. We still include those empty months so a
@@ -1294,8 +1300,8 @@ year_stats_axis_floor <- year_stats_label_y - score_range * 0.24
 add_prior_period_average <- function(period_summary) {
   period_summary %>%
     mutate(
-      cumulative_score_before = lag(cumsum(score_total)),
-      cumulative_count_before = lag(cumsum(review_count)),
+      cumulative_score_before = dplyr::lag(cumsum(score_total)),
+      cumulative_count_before = dplyr::lag(cumsum(review_count)),
       prior_avg = cumulative_score_before / cumulative_count_before,
       stats_label = paste0("avg ", round(period_avg, 1), "\nn=", review_count)
     )
@@ -1571,7 +1577,7 @@ trend_reviews <- trend_reviews %>%
 month_breaks <- month_lookup$month_index[seq(1, nrow(month_lookup), by = 6)]
 month_labels <- month_lookup$month_label[seq(1, nrow(month_lookup), by = 6)]
 month_stat_labels <- month_averages %>%
-  filter(month_index %in% month_breaks)
+  dplyr::filter(month_index %in% month_breaks)
 
 # The quarterly timeline has many quarters, so we label every 4th quarter.
 # That is roughly one label per year.
@@ -1582,7 +1588,7 @@ quarter_labels <- quarter_averages$quarter_label[seq(1, nrow(quarter_averages), 
 # correct, but they should not be drawn as points because they have no sentiment
 # score. Filtering only the point layer avoids harmless ggplot removal warnings.
 reviewed_month_points <- month_averages %>%
-  filter(review_count > 0, !is.na(period_avg))
+  dplyr::filter(review_count > 0, !is.na(period_avg))
 
 # The monthly heatmap is part of the selected figure set, so it is drawn by
 # default.
@@ -1664,7 +1670,7 @@ p4_rolling_base <- ggplot() +
     inherit.aes = FALSE
   ) +
   geom_line(
-    data = filter(month_averages, !is.na(prior_avg)),
+    data = dplyr::filter(month_averages, !is.na(prior_avg)),
     aes(x = month_index, y = prior_avg),
     color = "#7F8C8D",
     linetype = "dotted",
@@ -1698,7 +1704,7 @@ ggsave(file.path(figures_dir, "sentiment_trend_monthly_rolling.png"), plot = p4_
 # month looks typical. A value below -2 means it is unusually low by a robust
 # median-and-MAD rule, if there are enough current and historical reviews.
 monthly_drift_monitor <- sentiment_period_summary %>%
-  filter(period_type == "month", !is.na(robust_z_afinn_median))
+  dplyr::filter(period_type == "month", !is.na(robust_z_afinn_median))
 
 if (draw_drift_monitor) {
   if (nrow(monthly_drift_monitor) > 0) {
@@ -1754,7 +1760,7 @@ if (draw_quarterly_distribution) {
       inherit.aes = FALSE
     ) +
     geom_line(
-      data = filter(quarter_averages, !is.na(prior_avg)),
+      data = dplyr::filter(quarter_averages, !is.na(prior_avg)),
       aes(x = quarter_index, y = prior_avg),
       color = "#7F8C8D",
       linetype = "dotted",
@@ -1818,7 +1824,7 @@ p6 <- ggplot(trend_reviews, aes(x = year_index, y = score_afinn, group = year_in
     inherit.aes = FALSE
   ) +
   geom_line(
-    data = filter(year_averages, !is.na(prior_avg)),
+    data = dplyr::filter(year_averages, !is.na(prior_avg)),
     aes(x = year_index, y = prior_avg),
     color = "#7F8C8D",
     linetype = "dotted",
@@ -2113,7 +2119,7 @@ if (draw_quarterly_distribution) {
   p5_id <- ggplot(trend_reviews, aes(x = quarter_index, y = score_afinn, group = quarter_index)) +
     geom_boxplot(fill = "#D5F5E3", color = "#1E8449", alpha = 0.85, outlier.alpha = 0.35) +
     geom_point(data = quarter_averages_id, aes(x = quarter_index, y = period_avg), shape = 23, size = 2.8, fill = "#C0392B", color = "white", inherit.aes = FALSE) +
-    geom_line(data = filter(quarter_averages_id, !is.na(prior_avg)), aes(x = quarter_index, y = prior_avg), color = "#7F8C8D", linetype = "dotted", linewidth = 1, inherit.aes = FALSE) +
+    geom_line(data = dplyr::filter(quarter_averages_id, !is.na(prior_avg)), aes(x = quarter_index, y = prior_avg), color = "#7F8C8D", linetype = "dotted", linewidth = 1, inherit.aes = FALSE) +
     geom_text(data = quarter_averages_id, aes(x = quarter_index, y = stats_label_y, label = stats_label), angle = 90, hjust = 0.5, size = 1.9, color = "#34495E", inherit.aes = FALSE) +
     scale_x_continuous(breaks = quarter_breaks, labels = quarter_labels) +
     scale_y_continuous(limits = c(stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
@@ -2148,7 +2154,7 @@ p6_id <- ggplot(trend_reviews, aes(x = year_index, y = score_afinn, group = year
   geom_boxplot(fill = "#FADBD8", color = "#922B21", alpha = 0.85, outlier.alpha = 0.35) +
   geom_point(data = year_averages_id, aes(x = year_index, y = period_avg), shape = 23, size = 3, fill = "#2C3E50", color = "white", inherit.aes = FALSE) +
   geom_text(data = year_averages_id, aes(x = year_index, y = year_stats_label_y, label = stats_label), vjust = 0.5, size = 2, lineheight = 0.86, color = "#2C3E50", inherit.aes = FALSE) +
-  geom_line(data = filter(year_averages_id, !is.na(prior_avg)), aes(x = year_index, y = prior_avg), color = "#7F8C8D", linetype = "dotted", linewidth = 1, inherit.aes = FALSE) +
+  geom_line(data = dplyr::filter(year_averages_id, !is.na(prior_avg)), aes(x = year_index, y = prior_avg), color = "#7F8C8D", linetype = "dotted", linewidth = 1, inherit.aes = FALSE) +
   scale_x_continuous(breaks = year_averages_id$year_index, labels = year_averages_id$year_label) +
   scale_y_continuous(limits = c(year_stats_axis_floor, NA), expand = expansion(mult = c(0, 0.12))) +
   labs(

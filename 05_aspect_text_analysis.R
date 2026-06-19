@@ -12,10 +12,17 @@
 # STEP 1: Load Packages and Data
 # =====================================================================
 # These packages are collections of ready-made tools:
-# - tidyverse helps us clean tables, calculate summaries, and draw charts.
+# - dplyr/readr/stringr/ggplot2/tidyr help us clean tables, calculate summaries, and draw charts.
 # - tidytext helps us split review text into words and short phrases.
 # - syuzhet gives us the sentiment dictionaries used earlier in the project.
-library(tidyverse)
+library(dplyr, exclude = c("filter", "lag", "intersect", "setdiff", "setequal", "union"))
+library(readr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(purrr)
+library(tibble)
+library(forcats)
 library(tidytext)
 library(syuzhet)
 
@@ -292,7 +299,7 @@ aspect_reviews <- research_data %>%
 # its low/high aspect band. We use distinct() so the same review-aspect pair is
 # counted only once.
 aspect_review_index <- aspect_reviews %>%
-  filter(!is.na(band_key)) %>%
+  dplyr::filter(!is.na(band_key)) %>%
   distinct(aspect_key, aspect_label, review_id, band_key, aspect_score_band)
 
 # Count how many reviews are in the low and high groups for each aspect.
@@ -316,7 +323,7 @@ aspect_band_totals <- aspect_review_index %>%
 # also look less positive? It combines structured aspect ratings, overall star
 # ratings, length-normalized AFINN/Syuzhet sentiment, and NRC emotion counts.
 aspect_text_alignment <- aspect_reviews %>%
-  filter(!is.na(aspect_rating)) %>%
+  dplyr::filter(!is.na(aspect_rating)) %>%
   group_by(aspect_key, aspect_label) %>%
   summarise(
     reviews_with_aspect_rating = n_distinct(review_id),
@@ -366,7 +373,7 @@ write_csv(
 # per aspect: one for low aspect scores and one for high aspect scores. That
 # makes it easier to compare low-score reviews against high-score reviews.
 aspect_text_band_summary <- aspect_reviews %>%
-  filter(!is.na(aspect_score_band)) %>%
+  dplyr::filter(!is.na(aspect_score_band)) %>%
   group_by(aspect_key, aspect_label, band_key, aspect_score_band) %>%
   summarise(
     review_count = n_distinct(review_id),
@@ -411,7 +418,7 @@ token_review_data <- cleaned_tokens %>%
     review_id = as.character(review_id),
     term = str_to_lower(as.character(word))
   ) %>%
-  filter(
+  dplyr::filter(
     !is.na(term),
     str_detect(term, "^[a-z]+$"),
     nchar(term) >= 3,
@@ -433,10 +440,10 @@ phrase_review_data <- research_data %>%
     review_id = as.character(review_id),
     cleaned_text = as.character(cleaned_text)
   ) %>%
-  filter(!is.na(cleaned_text), cleaned_text != "") %>%
+  dplyr::filter(!is.na(cleaned_text), cleaned_text != "") %>%
   unnest_tokens(term, cleaned_text, token = "ngrams", n = 2) %>%
   separate(term, into = c("word_one", "word_two"), sep = " ", remove = FALSE, fill = "right") %>%
-  filter(
+  dplyr::filter(
     !is.na(word_one),
     !is.na(word_two),
     str_detect(word_one, "^[a-z]+$"),
@@ -519,7 +526,7 @@ build_term_comparison <- function(term_review_data, term_type) {
       ),
       term_type = term_type
     ) %>%
-    filter(count_low >= 2) %>%
+    dplyr::filter(count_low >= 2) %>%
     arrange(aspect_label, desc(log_lift_low_vs_high), desc(count_low), term)
 }
 
@@ -555,7 +562,7 @@ write_csv(
 # A mismatch is a review where the signals do not fully agree. These are useful
 # for qualitative reading because they often contain nuance that averages hide.
 aspect_text_mismatches <- aspect_reviews %>%
-  filter(!is.na(aspect_rating)) %>%
+  dplyr::filter(!is.na(aspect_rating)) %>%
   mutate(
     # Example: a guest gives 5 stars overall but gives Value a 2.
     high_overall_low_aspect = !is.na(overall_rating) & overall_rating >= 4 & aspect_rating <= 3,
@@ -569,7 +576,7 @@ aspect_text_mismatches <- aspect_reviews %>%
     # well. This helps avoid treating every part of the experience as broken.
     low_overall_high_aspect = !is.na(overall_rating) & overall_rating <= 3 & aspect_rating >= 4
   ) %>%
-  filter(high_overall_low_aspect | low_aspect_positive_text | high_aspect_negative_text | low_overall_high_aspect) %>%
+  dplyr::filter(high_overall_low_aspect | low_aspect_positive_text | high_aspect_negative_text | low_overall_high_aspect) %>%
   mutate(
     # pmap_chr() builds the label one review at a time, and it also works when
     # the table has zero rows. That keeps tiny samples from crashing here.
@@ -620,7 +627,7 @@ write_csv(
 # Save a smaller table of the lowest aspect-score examples. These are the rows
 # a researcher or manager should read first when interpreting the numbers.
 aspect_qualitative_examples <- aspect_reviews %>%
-  filter(!is.na(aspect_rating), aspect_rating <= 3) %>%
+  dplyr::filter(!is.na(aspect_rating), aspect_rating <= 3) %>%
   mutate(
     review_excerpt = make_review_excerpt(review_text)
   ) %>%
@@ -663,7 +670,7 @@ if (draw_aspect_text_figures) {
 # This chart checks whether length-normalized text sentiment generally improves
 # as the structured aspect rating increases. Each panel is one aspect.
 aspect_sentiment_plot_data <- aspect_reviews %>%
-  filter(!is.na(aspect_rating), !is.na(score_afinn_number)) %>%
+  dplyr::filter(!is.na(aspect_rating), !is.na(score_afinn_number)) %>%
   mutate(aspect_rating_group = factor(aspect_rating, levels = 1:5))
 
 if (nrow(aspect_sentiment_plot_data) > 0) {
@@ -811,7 +818,7 @@ if (nrow(plot_key_phrases) > 0) {
 # This chart keeps only negative AFINN words. It helps identify where low
 # aspect scores are connected to explicitly negative language.
 negative_heatmap_terms <- aspect_text_key_terms %>%
-  filter(term_sentiment == "negative", log_lift_low_vs_high > 0) %>%
+  dplyr::filter(term_sentiment == "negative", log_lift_low_vs_high > 0) %>%
   group_by(aspect_label) %>%
   slice_max(order_by = log_lift_low_vs_high, n = 5, with_ties = FALSE) %>%
   ungroup()
