@@ -1578,6 +1578,12 @@ month_stat_labels <- month_averages %>%
 quarter_breaks <- quarter_averages$quarter_index[seq(1, nrow(quarter_averages), by = 4)]
 quarter_labels <- quarter_averages$quarter_label[seq(1, nrow(quarter_averages), by = 4)]
 
+# Empty calendar months are kept in month_averages so rolling windows are
+# correct, but they should not be drawn as points because they have no sentiment
+# score. Filtering only the point layer avoids harmless ggplot removal warnings.
+reviewed_month_points <- month_averages %>%
+  filter(review_count > 0, !is.na(period_avg))
+
 # The monthly heatmap is part of the selected figure set, so it is drawn by
 # default.
 if (draw_monthly_heatmap) {
@@ -1626,7 +1632,7 @@ if (draw_monthly_heatmap) {
 # - Larger circles when a month has more reviews.
 # - A blue 6-month rolling average to smooth the noise.
 # - A dotted prior average line to compare the current month with past history.
-p4_rolling <- ggplot() +
+p4_rolling_base <- ggplot() +
   geom_rect(
     data = quarter_bands,
     aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf, fill = factor(band)),
@@ -1642,7 +1648,7 @@ p4_rolling <- ggplot() +
     inherit.aes = FALSE
   ) +
   geom_point(
-    data = month_averages,
+    data = reviewed_month_points,
     aes(x = month_index, y = period_avg, size = review_count, color = period_avg),
     shape = 21,
     fill = "white",
@@ -1667,7 +1673,9 @@ p4_rolling <- ggplot() +
   ) +
   scale_fill_manual(values = c("0" = "#EAF2F8", "1" = "#FDF2E9")) +
   scale_color_gradient2(low = "#C0392B", mid = "#95A5A6", high = "#16A085", midpoint = 0) +
-  scale_size_continuous(range = c(1.4, 5)) +
+  scale_size_continuous(range = c(1.4, 5))
+
+p4_rolling <- p4_rolling_base +
   scale_x_continuous(breaks = month_breaks, labels = month_labels) +
   labs(
     title = "Monthly Sentiment Trend with Rolling Average (AFINN per Median-Length Review)",
@@ -2064,14 +2072,16 @@ if (draw_monthly_heatmap) {
   cat("Skipping sentiment_trend_monthly_heatmap_id.png because it is not in the selected figure set.\n")
 }
 
-p4_rolling_id <- p4_rolling +
+p4_rolling_id <- p4_rolling_base +
   scale_x_continuous(breaks = month_breaks, labels = month_break_labels_id) +
   labs(
     title = "Tren Sentimen Bulanan (AFINN Ternormalisasi)",
     subtitle = "Titik menunjukkan rata-rata bulanan; ukuran titik mengikuti jumlah ulasan\nGaris biru = rata-rata bergerak 6 bulan; garis titik = rata-rata historis sebelumnya",
     x = "Linimasa (Bulan/Tahun)",
     y = "AFINN ternormalisasi"
-  )
+  ) +
+  theme_premium() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ggsave(file.path(figures_dir, "sentiment_trend_monthly_rolling_id.png"), plot = p4_rolling_id, width = 10, height = 5.5, dpi = 300)
 
 if (draw_drift_monitor) {

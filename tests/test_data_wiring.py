@@ -1157,6 +1157,26 @@ class DataWiringTests(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir)
 
+    def test_visualization_runs_without_plot_warning_noise(self):
+        temp_dir, project_copy = self.copy_project_for_workflow_test()
+        try:
+            result = subprocess.run(
+                ["Rscript", "04_visualization.R"],
+                cwd=project_copy,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=120,
+            )
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 0, output)
+            self.assertNotIn("Scale for x is already present", output)
+            self.assertNotIn("Adding another scale for x", output)
+            self.assertNotIn("Removed 47 rows containing missing values", output)
+            self.assertNotIn("Warning messages:", output)
+        finally:
+            shutil.rmtree(temp_dir)
+
     def test_monthly_rolling_average_uses_calendar_months(self):
         temp_dir, project_copy = self.copy_project_for_workflow_test()
         r_code = """
